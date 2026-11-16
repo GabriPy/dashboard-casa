@@ -297,9 +297,9 @@ onMounted(load);
             <div v-for="log in logs.slice(0, 12)" :key="log.id" class="timeline-item">
               <span class="timeline-dot" :style="{ background: PLANT_TYPES[log.type]?.color || '#6F7F57' }" />
               <div class="timeline-body">
-                <strong>{{ PLANT_TYPES[log.type]?.done || log.type }}</strong>
+                <strong>{{ log.note === 'Pioggia' ? 'Ha preso acqua dalla pioggia' : PLANT_TYPES[log.type]?.done || log.type }}</strong>
                 <span class="timeline-date">{{ formatDateTime(log.doneAt) }}</span>
-                <p v-if="log.note" class="timeline-note">{{ log.note }}</p>
+                <p v-if="log.note && log.note !== 'Pioggia'" class="timeline-note">{{ log.note }}</p>
                 <span v-if="log.by" class="timeline-by">da {{ log.by.name }}</span>
               </div>
             </div>

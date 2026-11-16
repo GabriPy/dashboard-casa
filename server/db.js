@@ -210,7 +210,11 @@ db.exec(SCHEMA);
 // Migrazioni idempotenti per database creati con versioni precedenti.
 db.prepare(
   `UPDATE plants
-   SET location = CASE WHEN lower(trim(COALESCE(location, ''))) LIKE 'balcone%' OR location = 'Balcone' THEN 'Esterno' ELSE 'Interno' END
+   SET location = CASE
+     WHEN lower(trim(COALESCE(location, ''))) LIKE 'balcone%'
+       OR lower(trim(COALESCE(location, ''))) = 'esterno' THEN 'Esterno'
+     ELSE 'Interno'
+   END
    WHERE location IS NULL OR location NOT IN ('Interno', 'Esterno')`,
 ).run();
 const recipeColumns = new Set(db.pragma('table_info(recipes)').map((column) => column.name));

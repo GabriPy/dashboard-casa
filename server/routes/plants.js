@@ -127,7 +127,7 @@ plantsRouter.post('/rain', (req, res) => {
   const today = todayLocal();
   const doneAt = nowIso();
   const rescheduledTaskIds = [];
-  let rescheduledCount = 0;
+  let rescheduledPlantCount = 0;
   if (plants.length) {
     db.transaction(() => {
       for (const plant of plants) {
@@ -135,16 +135,24 @@ plantsRouter.post('/rain', (req, res) => {
         if (task && task.next_due_date <= today) {
           completePlantTask(task, doneAt, 'Pioggia', req.user.id);
           rescheduledTaskIds.push(task.id);
-          rescheduledCount += 1;
+          rescheduledPlantCount += 1;
         } else {
           insertRainLog.run(plant.id, task?.id ?? null, 'acqua', doneAt, 'Pioggia', req.user.id);
         }
       }
     })();
     for (const taskId of rescheduledTaskIds) syncPlantTaskReminders(taskId);
-    audit(req.user.id, 'plant_rain_recorded', 'plant', null, { updatedPlantCount: plants.length, rescheduledCount });
+    audit(req.user.id, 'plant_rain_recorded', 'plant', null, {
+      updatedPlantCount: plants.length,
+      rescheduledPlantCount,
+    });
   }
-  res.json({ updatedCount: plants.length, updatedPlantCount: plants.length, rescheduledCount });
+  res.json({
+    updatedCount: plants.length,
+    updatedPlantCount: plants.length,
+    rescheduledPlantCount,
+    logOnlyPlantCount: plants.length - rescheduledPlantCount,
+  });
 });
 
 plantsRouter.patch('/:id', (req, res) => {

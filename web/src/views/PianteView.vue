@@ -64,19 +64,23 @@ async function recordRain() {
     ui.info('Non ci sono piante all’esterno.');
     return;
   }
-  const confirmed = await ui.confirm({
-    title: 'Registrare la pioggia?',
-    message: `Registrerò la pioggia per ${outdoorPlants.length} ${outdoorPlants.length === 1 ? 'pianta all’esterno' : 'piante all’esterno'}. Aggiornerò la prossima annaffiatura solo per quelle già da annaffiare.`,
-    confirmLabel: 'Registra pioggia',
-  });
-  if (!confirmed) return;
-
   rainBusy.value = true;
   try {
+    const rescheduledCount = outdoorPlants.filter((plant) =>
+      plant.tasks.some((task) => task.type === 'acqua' && task.isDue),
+    ).length;
+    const logOnlyCount = outdoorPlants.length - rescheduledCount;
+    const confirmed = await ui.confirm({
+      title: 'Registrare la pioggia?',
+      message: `La pioggia verrà aggiunta allo storico di ${outdoorPlants.length} ${outdoorPlants.length === 1 ? 'pianta esterna' : 'piante esterne'}. Il timer ripartirà per ${rescheduledCount} ${rescheduledCount === 1 ? 'pianta già da annaffiare' : 'piante già da annaffiare'}; per le altre ${logOnlyCount === 1 ? 'sarà registrato solo l’evento' : 'sarà registrato solo lo storico'}.`,
+      confirmLabel: 'Registra pioggia',
+    });
+    if (!confirmed) return;
+
     const data = await api('/api/plants/rain', { method: 'POST', body: {} });
     if (data.updatedPlantCount) {
       ui.success(
-        `Pioggia registrata nello storico di ${data.updatedPlantCount} ${data.updatedPlantCount === 1 ? 'pianta' : 'piante'}. ${data.rescheduledCount} ${data.rescheduledCount === 1 ? 'timer di annaffiatura riavviato' : 'timer di annaffiatura riavviati'}.`,
+        `Pioggia registrata nello storico di ${data.updatedPlantCount} ${data.updatedPlantCount === 1 ? 'pianta' : 'piante'}: ${data.rescheduledPlantCount} timer riavviati e ${data.logOnlyPlantCount} ${data.logOnlyPlantCount === 1 ? 'evento' : 'eventi'} aggiunti senza modificare il timer.`,
       );
     } else {
       ui.info('Non ci sono piante all’esterno.');

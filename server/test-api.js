@@ -266,13 +266,18 @@ async function main() {
     });
     assert.equal(outdoorNoTask.status, 201);
     const plantsBeforeRain = await call('/api/plants');
-    const expectedRainCount = plantsBeforeRain.data.plants.filter((item) => item.location === 'Esterno').length;
+    const outdoorPlants = plantsBeforeRain.data.plants.filter((item) => item.location === 'Esterno');
+    const expectedRainCount = outdoorPlants.length;
+    const expectedRescheduledCount = outdoorPlants.filter((item) =>
+      item.tasks.some((itemTask) => itemTask.type === 'acqua' && itemTask.isDue),
+    ).length;
     const rain = await call('/api/plants/rain', { method: 'POST', body: {} });
     assert.equal(rain.status, 200);
     assert.ok(expectedRainCount > 0);
     assert.equal(rain.data.updatedCount, expectedRainCount);
     assert.equal(rain.data.updatedPlantCount, expectedRainCount);
-    assert.ok(rain.data.rescheduledCount > 0);
+    assert.equal(rain.data.rescheduledPlantCount, expectedRescheduledCount);
+    assert.equal(rain.data.logOnlyPlantCount, expectedRainCount - expectedRescheduledCount);
     const balconyDetail = await call(`/api/plants/${balconyCreated.data.plant.id}`);
     assert.equal(balconyDetail.data.logs.length, 1);
     assert.equal(balconyDetail.data.logs[0].type, 'acqua');
