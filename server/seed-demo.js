@@ -188,7 +188,7 @@ export function seedDemo() {
     {
       name: 'Monstera',
       species: 'Monstera deliciosa',
-      location: 'Soggiorno, vicino alla finestra',
+      location: 'Interno',
       notes: 'Ruotare il vaso ogni tanto. Teme il freddo.',
       tasks: [
         ['acqua', 10, addDays(today, 2), 7],
@@ -198,21 +198,21 @@ export function seedDemo() {
     {
       name: 'Basilico',
       species: 'Ocimum basilicum',
-      location: 'Cucina, davanzale',
+      location: 'Interno',
       notes: 'Bagnare spesso, non lasciare fiori.',
       tasks: [['acqua', 3, today, 3]],
     },
     {
       name: 'Rosmarino',
       species: 'Salvia rosmarinus',
-      location: 'Balcone',
+      location: 'Esterno',
       notes: 'Poca acqua, tanto sole.',
       tasks: [['acqua', 14, addDays(today, -1), 14]],
     },
     {
       name: 'Pothos',
       species: 'Epipremnum aureum',
-      location: 'Ingresso',
+      location: 'Interno',
       notes: '',
       tasks: [['acqua', 7, addDays(today, 4), 7]],
     },

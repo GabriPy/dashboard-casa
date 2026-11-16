@@ -36,6 +36,8 @@ export const PLANT_TYPES = {
   controllo: { label: 'Controllare', done: 'Controllata', emoji: '🔍', color: '#6E7F55' },
 };
 
+export const PLANT_LOCATIONS = ['Interno', 'Esterno'];
+
 export const PLANT_INTERVALS = [
   { label: 'Ogni 2 giorni', value: 2 },
   { label: 'Ogni 3 giorni', value: 3 },

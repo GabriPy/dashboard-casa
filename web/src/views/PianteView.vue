@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '@/api.js';
 import { useUiStore } from '@/stores/ui.js';
-import { PLANT_INTERVALS, PLANT_TYPES } from '@/utils/constants.js';
+import { PLANT_INTERVALS, PLANT_LOCATIONS, PLANT_TYPES } from '@/utils/constants.js';
 import { dueLabel } from '@/utils/format.js';
 import PageHeader from '@/components/PageHeader.vue';
 import BaseModal from '@/components/BaseModal.vue';
@@ -22,11 +22,12 @@ const saving = ref(false);
 const formError = ref('');
 const busyId = ref('');
 const uploaderRef = ref(null);
+const rainBusy = ref(false);
 
 const form = reactive({
   name: '',
   species: '',
-  location: '',
+  location: 'Interno',
   notes: '',
   watering: true,
   waterInterval: 7,
@@ -41,7 +42,7 @@ function resetForm() {
   Object.assign(form, {
     name: '',
     species: '',
-    location: '',
+    location: 'Interno',
     notes: '',
     watering: true,
     waterInterval: 7,
@@ -55,6 +56,37 @@ function resetForm() {
 function openNew() {
   resetForm();
   modalOpen.value = true;
+}
+
+async function recordRain() {
+  const outdoorPlants = plants.value.filter((plant) => plant.location === 'Esterno');
+  if (!outdoorPlants.length) {
+    ui.info('Non ci sono piante all’esterno.');
+    return;
+  }
+  const confirmed = await ui.confirm({
+    title: 'Registrare la pioggia?',
+    message: `Registrerò la pioggia per ${outdoorPlants.length} ${outdoorPlants.length === 1 ? 'pianta all’esterno' : 'piante all’esterno'}. Aggiornerò la prossima annaffiatura solo per quelle già da annaffiare.`,
+    confirmLabel: 'Registra pioggia',
+  });
+  if (!confirmed) return;
+
+  rainBusy.value = true;
+  try {
+    const data = await api('/api/plants/rain', { method: 'POST', body: {} });
+    if (data.updatedPlantCount) {
+      ui.success(
+        `Pioggia registrata nello storico di ${data.updatedPlantCount} ${data.updatedPlantCount === 1 ? 'pianta' : 'piante'}. ${data.rescheduledCount} ${data.rescheduledCount === 1 ? 'timer di annaffiatura riavviato' : 'timer di annaffiatura riavviati'}.`,
+      );
+    } else {
+      ui.info('Non ci sono piante all’esterno.');
+    }
+    await load();
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    rainBusy.value = false;
+  }
 }
 
 async function save() {
@@ -131,6 +163,11 @@ onMounted(async () => {
       :subtitle="plants.length ? `${plants.length} piante · ${dueCount} da curare oggi` : 'Un piccolo diario verde, senza ansia.'"
     >
       <template #actions>
+        <button type="button" class="btn btn-soft" :disabled="rainBusy || loading" @click="recordRain">
+          <span v-if="rainBusy" class="spinner" />
+          <Icon v-else name="droplet" :size="17" /> Registra pioggia
+        </button>
+
         <button type="button" class="btn btn-primary" @click="openNew">
           <Icon name="plus" :size="17" /> Nuova pianta
         </button>
@@ -220,7 +257,9 @@ onMounted(async () => {
           </div>
           <div class="field full">
             <label for="pl-loc">Dove sta</label>
-            <input id="pl-loc" v-model="form.location" class="input" placeholder="es. Soggiorno, vicino alla finestra" maxlength="120" />
+            <select id="pl-loc" v-model="form.location" class="select">
+              <option v-for="location in PLANT_LOCATIONS" :key="location" :value="location">{{ location }}</option>
+            </select>
           </div>
         </div>
 

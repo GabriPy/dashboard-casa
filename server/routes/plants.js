@@ -13,11 +13,12 @@ export const plantsRouter = Router();
 plantsRouter.use(requireAuth);
 
 const taskTypes = z.enum(['acqua', 'concime', 'potatura', 'rinvaso', 'controllo']);
+const plantLocations = z.enum(['Interno', 'Esterno']);
 
 const plantSchema = z.object({
   name: z.string().trim().min(1, 'Il nome della pianta è obbligatorio.').max(80),
   species: z.string().trim().max(120).nullish(),
-  location: z.string().trim().max(120).nullish(),
+  location: plantLocations,
   notes: z.string().max(5000).nullish(),
 });
 
@@ -34,6 +35,20 @@ function tasksFor(plantId) {
 function plantPayload(row) {
   const [withAttachments] = attachToItems([row], 'plant');
   return plantOut(withAttachments, tasksFor(row.id), withAttachments.attachments);
+}
+
+function completePlantTask(task, doneAtIso, note, userId) {
+  const doneDate = isoToLocalDate(doneAtIso);
+  const nextDue = addDays(doneDate, task.interval_days);
+  db.prepare('UPDATE plant_tasks SET last_done_at = ?, next_due_date = ? WHERE id = ?').run(doneAtIso, nextDue, task.id);
+  db.prepare('INSERT INTO plant_logs (plant_id, task_id, type, done_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(
+    task.plant_id,
+    task.id,
+    task.type,
+    doneAtIso,
+    note,
+    userId,
+  );
 }
 
 plantsRouter.get('/', (req, res) => {
@@ -99,6 +114,37 @@ plantsRouter.post('/', (req, res) => {
   for (const task of tasksFor(id)) syncPlantTaskReminders(task.id);
   audit(req.user.id, 'create_plant', 'plant', id, { name: body.name });
   res.status(201).json({ plant: plantPayload(getPlant(id)) });
+});
+
+plantsRouter.post('/rain', (req, res) => {
+  const plants = db.prepare("SELECT id FROM plants WHERE location = 'Esterno'").all();
+  const findWaterTask = db.prepare(
+    "SELECT * FROM plant_tasks WHERE plant_id = ? AND type = 'acqua' ORDER BY next_due_date ASC LIMIT 1",
+  );
+  const insertRainLog = db.prepare(
+    'INSERT INTO plant_logs (plant_id, task_id, type, done_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+  );
+  const today = todayLocal();
+  const doneAt = nowIso();
+  const rescheduledTaskIds = [];
+  let rescheduledCount = 0;
+  if (plants.length) {
+    db.transaction(() => {
+      for (const plant of plants) {
+        const task = findWaterTask.get(plant.id);
+        if (task && task.next_due_date <= today) {
+          completePlantTask(task, doneAt, 'Pioggia', req.user.id);
+          rescheduledTaskIds.push(task.id);
+          rescheduledCount += 1;
+        } else {
+          insertRainLog.run(plant.id, task?.id ?? null, 'acqua', doneAt, 'Pioggia', req.user.id);
+        }
+      }
+    })();
+    for (const taskId of rescheduledTaskIds) syncPlantTaskReminders(taskId);
+    audit(req.user.id, 'plant_rain_recorded', 'plant', null, { updatedPlantCount: plants.length, rescheduledCount });
+  }
+  res.json({ updatedCount: plants.length, updatedPlantCount: plants.length, rescheduledCount });
 });
 
 plantsRouter.patch('/:id', (req, res) => {
@@ -196,21 +242,7 @@ plantsRouter.post('/:id/tasks/:taskId/done', (req, res) => {
   );
   const doneAt = body.doneAt || nowIso();
   const doneAtIso = doneAt.length === 10 ? localToUtc(`${doneAt}T12:00`).toISOString() : localToUtc(doneAt).toISOString();
-  const doneDate = isoToLocalDate(doneAtIso);
-  const nextDue = addDays(doneDate, task.interval_days);
-
-  const run = db.transaction(() => {
-    db.prepare('UPDATE plant_tasks SET last_done_at = ?, next_due_date = ? WHERE id = ?').run(doneAtIso, nextDue, taskId);
-    db.prepare('INSERT INTO plant_logs (plant_id, task_id, type, done_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(
-      id,
-      taskId,
-      task.type,
-      doneAtIso,
-      cleanText(body.note, 500),
-      req.user.id,
-    );
-  });
-  run();
+  db.transaction(() => completePlantTask(task, doneAtIso, cleanText(body.note, 500), req.user.id))();
   syncPlantTaskReminders(taskId);
   audit(req.user.id, 'plant_task_done', 'plant_task', taskId, { type: task.type });
   const updatedTask = db.prepare('SELECT * FROM plant_tasks WHERE id = ?').get(taskId);

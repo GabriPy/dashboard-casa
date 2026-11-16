@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '@/api.js';
 import { useUiStore } from '@/stores/ui.js';
-import { PLANT_INTERVALS, PLANT_TYPES } from '@/utils/constants.js';
+import { PLANT_INTERVALS, PLANT_LOCATIONS, PLANT_TYPES } from '@/utils/constants.js';
 import { dueLabel, formatDateTime, relativeDay, todayString } from '@/utils/format.js';
 import BaseModal from '@/components/BaseModal.vue';
 import AttachmentUploader from '@/components/AttachmentUploader.vue';
@@ -343,7 +343,9 @@ onMounted(load);
         </div>
         <div class="field">
           <label for="ep-loc">Dove sta</label>
-          <input id="ep-loc" v-model="editForm.location" class="input" maxlength="120" />
+          <select id="ep-loc" v-model="editForm.location" class="select">
+            <option v-for="location in PLANT_LOCATIONS" :key="location" :value="location">{{ location }}</option>
+          </select>
         </div>
         <div class="field">
           <label for="ep-notes">Note</label>

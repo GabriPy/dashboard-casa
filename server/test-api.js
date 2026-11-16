@@ -222,7 +222,7 @@ async function main() {
       body: {
         name: `Test felce ${stamp}`,
         species: 'Nephrolepis',
-        location: 'Bagno',
+        location: 'Interno',
         tasks: [{ type: 'acqua', intervalDays: 3 }],
       },
     });
@@ -238,6 +238,64 @@ async function main() {
     assert.notEqual(done.data.task.nextDueDate, task.nextDueDate);
     const detail = await call(`/api/plants/${plant.id}`);
     assert.ok(detail.data.logs.length >= 1);
+
+    const balconyCreated = await call('/api/plants', {
+      method: 'POST',
+      body: {
+        name: `Test esterno dovuta ${stamp}`,
+        location: 'Esterno',
+        tasks: [
+          { type: 'acqua', intervalDays: 5, nextDueDate: '2000-01-01' },
+          { type: 'concime', intervalDays: 30 },
+        ],
+      },
+    });
+    assert.equal(balconyCreated.status, 201);
+    const outdoorNotDue = await call('/api/plants', {
+      method: 'POST',
+      body: {
+        name: `Test esterno non dovuta ${stamp}`,
+        location: 'Esterno',
+        tasks: [{ type: 'acqua', intervalDays: 5, nextDueDate: '2099-12-31' }],
+      },
+    });
+    assert.equal(outdoorNotDue.status, 201);
+    const outdoorNoTask = await call('/api/plants', {
+      method: 'POST',
+      body: { name: `Test esterno senza attività ${stamp}`, location: 'Esterno' },
+    });
+    assert.equal(outdoorNoTask.status, 201);
+    const plantsBeforeRain = await call('/api/plants');
+    const expectedRainCount = plantsBeforeRain.data.plants.filter((item) => item.location === 'Esterno').length;
+    const rain = await call('/api/plants/rain', { method: 'POST', body: {} });
+    assert.equal(rain.status, 200);
+    assert.ok(expectedRainCount > 0);
+    assert.equal(rain.data.updatedCount, expectedRainCount);
+    assert.equal(rain.data.updatedPlantCount, expectedRainCount);
+    assert.ok(rain.data.rescheduledCount > 0);
+    const balconyDetail = await call(`/api/plants/${balconyCreated.data.plant.id}`);
+    assert.equal(balconyDetail.data.logs.length, 1);
+    assert.equal(balconyDetail.data.logs[0].type, 'acqua');
+    assert.equal(balconyDetail.data.logs[0].note, 'Pioggia');
+    assert.notEqual(balconyDetail.data.plant.tasks.find((t) => t.type === 'acqua').nextDueDate, '2000-01-01');
+    const notDueDetail = await call(`/api/plants/${outdoorNotDue.data.plant.id}`);
+    assert.equal(notDueDetail.data.logs.length, 1);
+    assert.equal(notDueDetail.data.logs[0].note, 'Pioggia');
+    assert.equal(notDueDetail.data.plant.tasks.find((t) => t.type === 'acqua').nextDueDate, '2099-12-31');
+    const noTaskDetail = await call(`/api/plants/${outdoorNoTask.data.plant.id}`);
+    assert.equal(noTaskDetail.data.logs.length, 1);
+    assert.equal(noTaskDetail.data.logs[0].type, 'acqua');
+    assert.equal(noTaskDetail.data.logs[0].taskId, null);
+    const indoorDetail = await call(`/api/plants/${plant.id}`);
+    assert.equal(indoorDetail.data.logs.length, 1);
+    const invalidLocation = await call('/api/plants', {
+      method: 'POST',
+      body: { name: `Test posizione invalida ${stamp}`, location: 'Balcone' },
+    });
+    assert.equal(invalidLocation.status, 400);
+    await call(`/api/plants/${balconyCreated.data.plant.id}`, { method: 'DELETE' });
+    await call(`/api/plants/${outdoorNotDue.data.plant.id}`, { method: 'DELETE' });
+    await call(`/api/plants/${outdoorNoTask.data.plant.id}`, { method: 'DELETE' });
     await call(`/api/plants/${plant.id}`, { method: 'DELETE' });
   });
 

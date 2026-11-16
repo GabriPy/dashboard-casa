@@ -6,7 +6,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
-import { config, smtpConfigured } from './config.js';import { authMiddleware } from './auth.js';
+import { config, smtpConfigured } from './config.js'; import { authMiddleware } from './auth.js';
 import { HttpError } from './lib/http.js';
 import { db } from './db.js';
 import { authRouter } from './routes/auth.js';
@@ -33,22 +33,22 @@ export function createApp() {
       contentSecurityPolicy:
         config.env === 'production'
           ? {
-              useDefaults: false,
-              directives: {
-                'default-src': ["'self'"],
-                'img-src': ["'self'", 'data:', 'blob:'],
-                'style-src': ["'self'", "'unsafe-inline'"],
-                'script-src': ["'self'"],
-                'connect-src': ["'self'"],
-                'font-src': ["'self'", 'data:'],
-                'manifest-src': ["'self'"],
-                'worker-src': ["'self'"],
-                'object-src': ["'none'"],
-                'base-uri': ["'self'"],
-                'form-action': ["'self'"],
-                'frame-ancestors': ["'none'"],
-              },
-            }
+            useDefaults: false,
+            directives: {
+              'default-src': ["'self'"],
+              'img-src': ["'self'", 'data:', 'blob:'],
+              'style-src': ["'self'", "'unsafe-inline'"],
+              'script-src': ["'self'"],
+              'connect-src': ["'self'"],
+              'font-src': ["'self'", 'data:'],
+              'manifest-src': ["'self'"],
+              'worker-src': ["'self'"],
+              'object-src': ["'none'"],
+              'base-uri': ["'self'"],
+              'form-action': ["'self'"],
+              'frame-ancestors': ["'none'"],
+            },
+          }
           : false,
       crossOriginEmbedderPolicy: false,
       hsts: config.cookieSecure ? { maxAge: 15552000, includeSubDomains: true } : false,
@@ -61,7 +61,9 @@ export function createApp() {
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
   // Difesa CSRF: le richieste che modificano dati devono arrivare dalla stessa origine.
+  // Mettere nel .env DEV_NO_SECURITY=true per disabilitare questa protezione in sviluppo.
   app.use((req, res, next) => {
+    if (process.env.DEV_NO_SECURITY === 'true') return next(); // <-- solo in sviluppo
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
     if (req.path.startsWith('/api/health')) return next();
     const origin = req.get('origin');

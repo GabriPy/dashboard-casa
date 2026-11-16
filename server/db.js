@@ -208,6 +208,11 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 db.exec(SCHEMA);
 
 // Migrazioni idempotenti per database creati con versioni precedenti.
+db.prepare(
+  `UPDATE plants
+   SET location = CASE WHEN lower(trim(COALESCE(location, ''))) LIKE 'balcone%' OR location = 'Balcone' THEN 'Esterno' ELSE 'Interno' END
+   WHERE location IS NULL OR location NOT IN ('Interno', 'Esterno')`,
+).run();
 const recipeColumns = new Set(db.pragma('table_info(recipes)').map((column) => column.name));
 if (!recipeColumns.has('source')) {
   db.exec("ALTER TABLE recipes ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
