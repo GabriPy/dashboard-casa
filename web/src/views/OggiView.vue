@@ -436,7 +436,7 @@ onMounted(load);
         </div>
 
         <div class="page-stack">
-          <section v-if="dashboardPreferences.sections.visible.includes('shopping')" class="card card-terracotta shopping-card" :style="{ order: sectionOrder('shopping') }">
+          <section v-if="dashboardPreferences.sections.visible.includes('shopping')" class="card shopping-card" :style="{ order: sectionOrder('shopping') }">
             <header class="card-head">
               <div>
                 <p class="eyebrow">Spesa di casa</p>
@@ -485,7 +485,7 @@ onMounted(load);
             </form>
           </section>
 
-          <section v-if="dashboardPreferences.sections.visible.includes('plants')" class="card card-sage" :style="{ order: sectionOrder('plants') }">
+          <section v-if="dashboardPreferences.sections.visible.includes('plants')" class="card" :style="{ order: sectionOrder('plants') }">
             <header class="card-head">
               <div>
                 <p class="eyebrow">Verde di casa</p>
@@ -520,9 +520,16 @@ onMounted(load);
             </RouterLink>
           </section>
 
-          <section v-if="recipeOfDay && dashboardPreferences.sections.visible.includes('recipe')" class="card card-gold recipe-suggestion" :style="{ order: sectionOrder('recipe') }">
-            <p class="eyebrow">Dalla cucina</p>
-            <h2>{{ recipeOfDay.title }}</h2>
+          <section v-if="recipeOfDay && dashboardPreferences.sections.visible.includes('recipe')" class="card recipe-suggestion" :style="{ order: sectionOrder('recipe') }">
+            <header class="card-head">
+              <div>
+                <p class="eyebrow">Dalla cucina</p>
+                <h2>{{ recipeOfDay.title }}</h2>
+              </div>
+              <RouterLink :to="`/ricette/${recipeOfDay.id}`" class="card-action">
+                Apri <Icon name="arrow-right" :size="14" />
+              </RouterLink>
+            </header>
             <p class="recipe-desc">{{ recipeOfDay.description || 'Una ricetta di casa da riscoprire.' }}</p>
             <div class="row row-wrap recipe-meta">
               <span class="badge badge-gold">{{ recipeOfDay.category }}</span>
@@ -530,7 +537,6 @@ onMounted(load);
               <span v-if="recipeOfDay.servings" class="tiny muted"><Icon name="users" :size="12" /> {{ recipeOfDay.servings }} porzioni</span>
             </div>
             <div class="row recipe-actions">
-              <RouterLink :to="`/ricette/${recipeOfDay.id}`" class="btn btn-ghost btn-sm">Apri ricetta</RouterLink>
               <button type="button" class="btn btn-soft btn-sm" :disabled="busyKey === `recipe-${recipeOfDay.id}`" @click="recipeToShopping(recipeOfDay)">
                 <Icon name="basket" :size="14" /> Alla spesa
               </button>
@@ -818,8 +824,7 @@ onMounted(load);
   text-decoration: underline;
 }
 .recipe-suggestion h2 {
-  font-size: 23px;
-  margin: 8px 0 6px;
+  max-width: 24rem;
 }
 .recipe-desc {
   font-size: 13px;
@@ -843,9 +848,6 @@ onMounted(load);
 .recipe-actions {
   margin-top: 16px;
   gap: 8px;
-}
-.recipe-actions .btn {
-  flex: 1;
 }
 .dashboard-sections > .page-stack {
   display: contents;
