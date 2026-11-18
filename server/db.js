@@ -193,6 +193,12 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS dashboard_preferences (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  preferences TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -224,7 +230,7 @@ if (!recipeColumns.has('source')) {
 if (!recipeColumns.has('source_prompt')) {
   db.exec('ALTER TABLE recipes ADD COLUMN source_prompt TEXT');
 }
-db.pragma('user_version = 2');
+db.pragma('user_version = 3');
 
 export const nowIso = () => new Date().toISOString();
 

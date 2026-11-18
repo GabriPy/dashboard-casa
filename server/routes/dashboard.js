@@ -1,12 +1,59 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
+import { validate } from '../lib/http.js';
 import { addDays, expandRecurrence, todayLocal } from '../lib/time.js';
 import { attachToItems } from '../lib/entities.js';
 import { deadlineOut, eventOut, plantTaskOut, shoppingItemOut } from '../lib/serialize.js';
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
+
+const CARD_IDS = ['shopping', 'deadlines', 'plants', 'recipes'];
+const SECTION_IDS = ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'];
+const uniqueList = (values) => new Set(values).size === values.length;
+const dashboardPreferencesSchema = z
+  .object({
+    cards: z.object({
+      order: z.array(z.enum(CARD_IDS)).length(CARD_IDS.length).refine(uniqueList),
+      visible: z.array(z.enum(CARD_IDS)).refine(uniqueList),
+    }),
+    sections: z.object({
+      order: z.array(z.enum(SECTION_IDS)).length(SECTION_IDS.length).refine(uniqueList),
+      visible: z.array(z.enum(SECTION_IDS)).refine(uniqueList),
+    }),
+  })
+  .strict();
+
+export const DEFAULT_DASHBOARD_PREFERENCES = {
+  cards: { order: [...CARD_IDS], visible: [...CARD_IDS] },
+  sections: { order: [...SECTION_IDS], visible: [...SECTION_IDS] },
+};
+
+dashboardRouter.get('/preferences', (req, res) => {
+  const row = db.prepare('SELECT preferences FROM dashboard_preferences WHERE user_id = ?').get(req.user.id);
+  if (!row) {
+    res.json({ preferences: DEFAULT_DASHBOARD_PREFERENCES });
+    return;
+  }
+  try {
+    const preferences = dashboardPreferencesSchema.parse(JSON.parse(row.preferences));
+    res.json({ preferences });
+  } catch (err) {
+    console.error(`[dashboard] preferenze non valide per il profilo ${req.user.id}:`, err.message);
+    res.json({ preferences: DEFAULT_DASHBOARD_PREFERENCES });
+  }
+});
+
+dashboardRouter.put('/preferences', (req, res) => {
+  const preferences = validate(dashboardPreferencesSchema, req.body);
+  db.prepare(
+    `INSERT INTO dashboard_preferences (user_id, preferences, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET preferences = excluded.preferences, updated_at = excluded.updated_at`,
+  ).run(req.user.id, JSON.stringify(preferences), new Date().toISOString());
+  res.json({ preferences });
+});
 
 dashboardRouter.get('/', (req, res) => {
   const today = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : todayLocal();

@@ -82,6 +82,49 @@ async function main() {
     assert.ok(data.today);
   });
 
+  await step('preferenze dashboard separate per profilo', async () => {
+    const defaults = {
+      cards: {
+        order: ['shopping', 'deadlines', 'plants', 'recipes'],
+        visible: ['shopping', 'deadlines', 'plants', 'recipes'],
+      },
+      sections: {
+        order: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
+        visible: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
+      },
+    };
+    const initial = await call('/api/dashboard/preferences');
+    assert.deepEqual(initial.data.preferences, defaults);
+
+    const adminPreferences = {
+      cards: { order: ['recipes', 'plants', 'deadlines', 'shopping'], visible: ['recipes', 'plants'] },
+      sections: { order: ['recipe', 'plants', 'shopping', 'deadlines', 'agenda'], visible: ['recipe', 'plants', 'agenda'] },
+    };
+    const savedAdmin = await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
+    assert.equal(savedAdmin.status, 200);
+    assert.deepEqual(savedAdmin.data.preferences, adminPreferences);
+    const invalid = await call('/api/dashboard/preferences', {
+      method: 'PUT',
+      body: { ...adminPreferences, cards: { ...adminPreferences.cards, order: ['recipes', 'recipes', 'deadlines', 'shopping'] } },
+    });
+    assert.equal(invalid.status, 400);
+
+    await login(2, MAMMA_PIN);
+    const memberInitial = await call('/api/dashboard/preferences');
+    assert.deepEqual(memberInitial.data.preferences, defaults);
+    const memberPreferences = {
+      cards: { order: ['deadlines', 'shopping', 'plants', 'recipes'], visible: ['deadlines', 'shopping', 'plants', 'recipes'] },
+      sections: defaults.sections,
+    };
+    const savedMember = await call('/api/dashboard/preferences', { method: 'PUT', body: memberPreferences });
+    assert.deepEqual(savedMember.data.preferences, memberPreferences);
+
+    await login(1, ADMIN_PIN);
+    const stillAdmin = await call('/api/dashboard/preferences');
+    assert.deepEqual(stillAdmin.data.preferences, adminPreferences);
+    await call('/api/dashboard/preferences', { method: 'PUT', body: defaults });
+  });
+
   await step('evento ricorrente e espansione', async () => {
     const today = new Date().toISOString().slice(0, 10);
     const created = await call('/api/events', {

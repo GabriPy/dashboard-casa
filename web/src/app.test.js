@@ -152,6 +152,23 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     }, 20000);
   }
 
+  it('apre la personalizzazione della dashboard', async () => {
+    await router.push('/');
+    await settle(400);
+    const customize = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Personalizza'));
+    expect(customize).toBeTruthy();
+    customize.click();
+    await settle(200);
+    expect(document.body.textContent).toContain('Personalizza la dashboard');
+    expect(document.body.textContent).toContain('Le modifiche valgono solo per il tuo profilo.');
+    expect(document.body.textContent).toContain('Riquadri riepilogativi');
+    expect(document.body.textContent).toContain('Sezioni della giornata');
+    const cancel = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla');
+    expect(cancel).toBeTruthy();
+    cancel.click();
+    await settle(100);
+  });
+
   it('renderizza il dettaglio di una ricetta', async () => {
     const list = await apiJson('/api/recipes');
     const recipe = list.recipes[0];
