@@ -152,6 +152,52 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     }, 20000);
   }
 
+  it('mostra l’anteprima di un evento e apre la modifica solo su richiesta', async () => {
+    const { api } = await import('./api.js');
+    const dashboard = await api('/api/dashboard');
+    const title = `Test anteprima evento ${Date.now()}`;
+    const created = await api('/api/events', {
+      method: 'POST',
+      body: {
+        title,
+        description: 'Dettagli di prova dell’evento.',
+        startsAt: `${dashboard.today}T09:00`,
+        allDay: false,
+        category: 'Casa',
+        visibility: 'shared',
+      },
+    });
+    const eventId = created.event.id;
+
+    try {
+      await router.push({ path: '/calendario', query: { giorno: dashboard.today } });
+      await settle(700);
+      const eventButton = [...document.querySelectorAll('.day-event')].find((button) => button.textContent.includes(title));
+      expect(eventButton, 'evento del giorno non trovato').toBeTruthy();
+      expect(document.querySelector('#ev-title')).toBeNull();
+      eventButton.click();
+      await settle(200);
+
+      expect(document.body.textContent).toContain(title);
+      expect(document.body.textContent).toContain('Dettagli di prova dell’evento.');
+      expect(document.body.textContent).toContain(`Creato da ${loginUser.name}`);
+      expect(document.querySelector('#ev-title')).toBeNull();
+
+      const editButton = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Modifica evento'));
+      expect(editButton).toBeTruthy();
+      editButton.click();
+      await settle(250);
+      expect(document.querySelector('#ev-title')?.value).toBe(title);
+
+      const cancel = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla');
+      expect(cancel).toBeTruthy();
+      cancel.click();
+      await settle(150);
+    } finally {
+      await api(`/api/events/${eventId}`, { method: 'DELETE' });
+    }
+  }, 20000);
+
   it('apre la personalizzazione della dashboard', async () => {
     await router.push('/');
     await settle(400);

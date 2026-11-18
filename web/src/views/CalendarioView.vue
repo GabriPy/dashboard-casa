@@ -31,6 +31,8 @@ const events = ref([]);
 const loading = ref(true);
 const saving = ref(false);
 const modalOpen = ref(false);
+const previewOpen = ref(false);
+const previewEvent = ref(null);
 const editing = ref(null);
 const uploaderRef = ref(null);
 const formError = ref('');
@@ -134,12 +136,29 @@ function resetForm(date = selectedDate.value) {
 }
 
 function openNew(date = selectedDate.value) {
+  previewOpen.value = false;
+  previewEvent.value = null;
   editing.value = null;
   resetForm(date);
   modalOpen.value = true;
 }
 
+function openPreview(event) {
+  previewEvent.value = event;
+  previewOpen.value = true;
+}
+
+async function editPreviewEvent() {
+  if (!previewEvent.value) return;
+  const event = previewEvent.value;
+  previewOpen.value = false;
+  await nextTick();
+  openEdit(event);
+}
+
 function openEdit(event) {
+  previewEvent.value = null;
+  previewOpen.value = false;
   editing.value = event;
   const start = event.startsAt;
   Object.assign(form, {
@@ -342,7 +361,7 @@ onMounted(async () => {
                 type="button"
                 class="event-chip"
                 :style="{ '--cat': CAT_COLORS[event.category] || '#8B7B67', background: `${CAT_COLORS[event.category] || '#8B7B67'}20`, color: CAT_COLORS[event.category] || '#8B7B67' }"
-                @click.stop="openEdit(event)"
+                @click.stop="openPreview(event)"
               >
                 <template v-if="!event.allDay">{{ formatTime(event.startsAt) }}</template>
                 <template v-else>Tutto il giorno</template>
@@ -378,7 +397,7 @@ onMounted(async () => {
 
           <div v-if="loading" class="loading-line"><span class="spinner" /> Carico…</div>
           <div v-else-if="selectedEvents.length" class="day-list">
-            <button v-for="event in selectedEvents" :key="event.occurrenceKey" type="button" class="day-event" @click="openEdit(event)">
+            <button v-for="event in selectedEvents" :key="event.occurrenceKey" type="button" class="day-event" @click="openPreview(event)">
               <span class="day-event-time">{{ event.allDay ? 'Tutto il giorno' : formatTime(event.startsAt) }}</span>
               <span class="day-event-bar" :style="{ background: CAT_COLORS[event.category] || '#8B7B67' }" />
               <span class="day-event-body">
@@ -387,6 +406,7 @@ onMounted(async () => {
                   {{ event.category }}
                   <template v-if="event.location"> · {{ event.location }}</template>
                   <template v-if="event.attachments?.length"> · <Icon name="paperclip" :size="11" /> {{ event.attachments.length }}</template>
+                  <template v-if="event.createdBy?.name"> · Creato da {{ event.createdBy.name }}</template>
                 </span>
                 <span v-if="event.recurrence !== 'none'" class="badge badge-blue recurring-badge">
                   <Icon name="refresh" :size="10" /> ricorrente
@@ -417,6 +437,49 @@ onMounted(async () => {
         </div>
       </aside>
     </div>
+
+    <BaseModal
+      v-model="previewOpen"
+      :title="previewEvent?.title || 'Dettagli evento'"
+      :subtitle="previewEvent?.isRecurring ? 'Evento ricorrente' : 'Dettagli dell’appuntamento'"
+      size="md"
+    >
+      <div v-if="previewEvent" class="event-preview">
+        <div class="event-preview-meta">
+          <span class="event-preview-category" :style="{ '--cat': CAT_COLORS[previewEvent.category] || '#8B7B67' }">
+            <span class="legend-dot" /> {{ previewEvent.category }}
+          </span>
+          <span>{{ capitalize(formatLongDate(previewEvent.startsAt.slice(0, 10))) }}</span>
+          <span>{{ previewEvent.allDay ? 'Tutto il giorno' : formatTime(previewEvent.startsAt) }}</span>
+          <span v-if="previewEvent.endsAt && !previewEvent.allDay">Fino alle {{ formatTime(previewEvent.endsAt) }}</span>
+          <span v-if="previewEvent.location"><Icon name="pin" :size="14" /> {{ previewEvent.location }}</span>
+          <span v-if="previewEvent.createdBy?.name"><Icon name="user" :size="14" /> Creato da {{ previewEvent.createdBy.name }}</span>
+          <span v-if="previewEvent.visibility === 'private'"><Icon name="lock" :size="14" /> Evento privato</span>
+          <span v-if="previewEvent.isRecurring"><Icon name="refresh" :size="14" /> Si ripete {{ RECURRENCE_OPTIONS.find((option) => option.value === previewEvent.recurrence)?.label?.toLowerCase() }}</span>
+        </div>
+        <p v-if="previewEvent.description" class="event-preview-description">{{ previewEvent.description }}</p>
+        <div v-if="previewEvent.attachments?.length" class="event-preview-attachments">
+          <span class="eyebrow">Allegati · {{ previewEvent.attachments.length }}</span>
+          <a
+            v-for="attachment in previewEvent.attachments"
+            :key="attachment.id"
+            :href="attachment.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="event-preview-attachment"
+          >
+            <Icon :name="attachment.isImage ? 'image' : 'file'" :size="16" />
+            {{ attachment.name }}
+          </a>
+        </div>
+      </div>
+      <template #footer>
+        <button type="button" class="btn btn-ghost" @click="previewOpen = false">Chiudi</button>
+        <button type="button" class="btn btn-primary" @click="editPreviewEvent">
+          <Icon name="edit" :size="15" /> Modifica evento
+        </button>
+      </template>
+    </BaseModal>
 
     <BaseModal
       v-model="modalOpen"
@@ -732,6 +795,54 @@ onMounted(async () => {
   align-items: center;
   gap: 3px;
   flex-wrap: wrap;
+}
+.event-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.event-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.event-preview-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.event-preview-category {
+  color: var(--cat);
+  font-weight: 700;
+}
+.event-preview-category .legend-dot {
+  background: var(--cat);
+}
+.event-preview-description {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.event-preview-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.event-preview-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-dark);
+  text-decoration: none;
+  font-size: 13px;
+}
+.event-preview-attachment:hover {
+  text-decoration: underline;
 }
 .recurring-badge {
   align-self: flex-start;
