@@ -46,8 +46,19 @@ Nasce per **mamma.gabrielepili.it**, ma è un normale progetto Docker che puoi f
 
 ## 🖼️ Screenshots
 
-> [!NOTE]
-> **TODO:** aggiungi qui le schermate reali dell'app, ad esempio in `docs/assets/`. Sezioni consigliate: *Oggi*, *Spesa*, *Calendario*, *Ricette*, *Piante*.
+<div align="center">
+<img src="docs/screenshots/home.png" width="22%" alt="Oggi" />
+<img src="docs/screenshots/shopping_list.png" width="22%" alt="Lista spesa" />
+<img src="docs/screenshots/calendar.png" width="22%" alt="Calendario" />
+<img src="docs/screenshots/expirations.png" width="22%" alt="Scadenze" />
+</div>
+
+<div align="center">
+<img src="docs/screenshots/recipes.png" width="22%" alt="Ricette" />
+<img src="docs/screenshots/plants.png" width="22%" alt="Piante" />
+<img src="docs/screenshots/settings.png" width="22%" alt="Impostazioni" />
+<img src="docs/screenshots/profile.png" width="22%" alt="Oggi" />
+</div>
 
 <!--
 <div align="center">
