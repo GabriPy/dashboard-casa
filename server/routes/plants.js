@@ -124,7 +124,6 @@ plantsRouter.post('/rain', (req, res) => {
   const insertRainLog = db.prepare(
     'INSERT INTO plant_logs (plant_id, task_id, type, done_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?)',
   );
-  const today = todayLocal();
   const doneAt = nowIso();
   const rescheduledTaskIds = [];
   let rescheduledPlantCount = 0;
@@ -132,7 +131,7 @@ plantsRouter.post('/rain', (req, res) => {
     db.transaction(() => {
       for (const plant of plants) {
         const task = findWaterTask.get(plant.id);
-        if (task && task.next_due_date <= today) {
+        if (task) {
           completePlantTask(task, doneAt, 'Pioggia', req.user.id);
           rescheduledTaskIds.push(task.id);
           rescheduledPlantCount += 1;

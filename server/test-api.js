@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { addDays, todayLocal } from './lib/time.js';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const ADMIN_PIN = process.env.TEST_ADMIN_PIN || '1234';
@@ -312,7 +313,7 @@ async function main() {
     const outdoorPlants = plantsBeforeRain.data.plants.filter((item) => item.location === 'Esterno');
     const expectedRainCount = outdoorPlants.length;
     const expectedRescheduledCount = outdoorPlants.filter((item) =>
-      item.tasks.some((itemTask) => itemTask.type === 'acqua' && itemTask.isDue),
+      item.tasks.some((itemTask) => itemTask.type === 'acqua'),
     ).length;
     const rain = await call('/api/plants/rain', { method: 'POST', body: {} });
     assert.equal(rain.status, 200);
@@ -329,7 +330,11 @@ async function main() {
     const notDueDetail = await call(`/api/plants/${outdoorNotDue.data.plant.id}`);
     assert.equal(notDueDetail.data.logs.length, 1);
     assert.equal(notDueDetail.data.logs[0].note, 'Pioggia');
-    assert.equal(notDueDetail.data.plant.tasks.find((t) => t.type === 'acqua').nextDueDate, '2099-12-31');
+    assert.notEqual(notDueDetail.data.plant.tasks.find((t) => t.type === 'acqua').nextDueDate, '2099-12-31');
+    assert.equal(
+      notDueDetail.data.plant.tasks.find((t) => t.type === 'acqua').nextDueDate,
+      addDays(todayLocal(), 5),
+    );
     const noTaskDetail = await call(`/api/plants/${outdoorNoTask.data.plant.id}`);
     assert.equal(noTaskDetail.data.logs.length, 1);
     assert.equal(noTaskDetail.data.logs[0].type, 'acqua');
