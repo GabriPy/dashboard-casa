@@ -1,6 +1,7 @@
 <div align="center">
 
-<img src="docs/assets/hero.png" alt="Ghibiri Home" width="720" />
+<!-- <img src="docs/assets/hero.png" alt="Ghibiri Home" width="720" /> -->
+<img src="docs/svg/banner-animated.svg" alt="Ghibiri Home: la casa di famiglia, organizzata" width="100%">
 
 # 🏡 Ghibiri Home
 
