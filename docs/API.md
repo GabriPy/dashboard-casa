@@ -168,11 +168,23 @@ Tipi ammessi: immagini, PDF, `text/plain`, Word (`.doc`, `.docx`). Limite `MAX_U
 | Metodo | Percorso | Accesso | Note |
 | --- | --- | --- | --- |
 | GET | `/api/settings/public` | sessione | Nome casa, orari, limiti (per l’interfaccia). |
-| GET | `/api/settings` | admin | Impostazioni, stato SMTP, spazio, coda promemoria, ultimo backup. |
-| PATCH | `/api/settings` | admin | `household_name`, `reminder_hour`, `reminder_email_enabled`, `deadline_offsets`, `event_offset_days`, `plant_reminders`. Rigenera la coda. |
-| POST | `/api/settings/test-email` | admin | `{ to? }`; richiede SMTP configurato. |
+| GET | `/api/settings` | admin | Impostazioni, spazio, coda promemoria, ultimo backup e stato AI. |
+| PATCH | `/api/settings` | admin | `household_name`, `reminder_hour`, `deadline_offsets`, `event_offset_days`, `plant_reminders`. Rigenera la coda quando necessario. |
 | POST | `/api/settings/run-reminders` | admin | Forza il controllo della coda. |
 | POST | `/api/settings/resync-reminders` | admin | Rigenera tutti i promemoria. |
+
+## Notifiche push
+
+Tutti gli endpoint richiedono una sessione. Le preferenze si applicano al profilo dell’utente su tutti i suoi dispositivi.
+
+| Metodo | Percorso | Note |
+| --- | --- | --- |
+| GET | `/api/push/status` | Stato VAPID e sottoscrizioni del profilo; accetta `?endpoint=` per verificare il dispositivo corrente. |
+| GET | `/api/push/preferences` | Legge toggle generale e preferenze per eventi, scadenze e piante. |
+| PUT | `/api/push/preferences` | Aggiorna tutte le preferenze push. |
+| POST | `/api/push/subscriptions` | Registra o aggiorna la sottoscrizione push del dispositivo. |
+| DELETE | `/api/push/subscriptions` | Rimuove la sottoscrizione indicata nel body. |
+| POST | `/api/push/test` | Invia una notifica di prova al dispositivo indicato. |
 
 ## Backup
 

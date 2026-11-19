@@ -77,13 +77,13 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 |---|---|---|
 | 🌤️ | **Oggi** | Riepilogo della giornata: appuntamenti, scadenze vicine, spesa e piante da curare. Aggiunta rapida alla spesa. |
 | 🛒 | **Spesa** | Più liste (casa, festa, mare), reparti, quantità, spunta, pulizia dei completati. Un prodotto già presente non viene duplicato. |
-| 📅 | **Calendario** | Vista mensile, eventi con ora, luogo e categoria, ricorrenze (giorno, settimana, mese, anno), promemoria email. |
+| 📅 | **Calendario** | Vista mensile, eventi con ora, luogo e categoria, ricorrenze (giorno, settimana, mese, anno), promemoria push. |
 | 🧾 | **Scadenze** | Bollette, documenti, veicoli, casa. Importo, note, ricorrenza mensile o annuale, "fatto" con avanzamento automatico. |
 | 🍳 | **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti, **"aggiungi ingredienti alla spesa"** e **generazione con AI**. |
 | 🪴 | **Piante** | Schede con foto, attività ricorrenti (acqua, concime, potatura, rinvaso, controllo), diario delle cure. |
 | 📎 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | 👨‍👩‍👧 | **Famiglia** | Profili separati con PIN, ruoli amministratore/famiglia, dati condivisi o privati. |
-| 🔔 | **Promemoria** | Email per scadenze (7 e 1 giorno prima), eventi (1 giorno prima) e piante (il giorno stesso), con coda persistente. |
+| 🔔 | **Promemoria** | Notifiche push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima) e piante (il giorno stesso), con coda persistente. |
 | 💾 | **Backup** | Pulsante "Esporta backup": ZIP con database, foto e allegati, dati leggibili e istruzioni di ripristino. |
 
 ---
@@ -108,13 +108,14 @@ flowchart LR
         UP[["uploads/<br/>foto e allegati"]]
     end
 
-    SMTP["✉️ Server SMTP"]
+    Push["☁️ Servizio push del browser"]
     AI["🤖 Provider AI<br/>compatibile OpenAI"]
 
     P -->|HTTPS| CF -->|http://localhost:3080| API
     API --- DB
     API --- UP
-    API -->|promemoria| SMTP
+    API -->|Web Push| Push
+    Push -->|notifica| P
     API -.->|ricette, opzionale| AI
 ```
 
@@ -125,16 +126,18 @@ sequenceDiagram
     participant U as Utente
     participant A as API
     participant Q as Coda promemoria
-    participant S as SMTP
+    participant S as Servizio push
+    participant W as Service worker
 
     U->>A: Crea evento o scadenza
     A->>Q: Genera i promemoria (7 e 1 giorno prima)
     Note over Q: Persistente: sopravvive ai riavvii
     loop Scheduler
         Q->>Q: Ci sono invii dovuti?
-        Q->>S: Invia email
+        Q->>S: Invia notifica Web Push
+        S->>W: Consegna la notifica
     end
-    Note over Q,S: Se SMTP non è configurato la coda resta ferma<br/>e nessuna email viene persa
+    Note over Q,W: La consegna richiede chiavi VAPID configurate<br/>e una sottoscrizione attiva sul dispositivo
 ```
 
 Se cambi orari o giorni di preavviso, i promemoria vengono rigenerati automaticamente.
@@ -153,7 +156,7 @@ Se cambi orari o giorni di preavviso, i promemoria vengono rigenerati automatica
 | Dati condivisi | **Condivisi di default**, con opzione "Privato" su eventi e scadenze | La casa è di tutti; ciò che è personale resta solo di chi lo crea. |
 | Foto e allegati | Disponibili subito su tutti i moduli | Per un elemento nuovo i file vengono caricati subito dopo il salvataggio. |
 | Backup | **Solo manuale**, con pulsante di esportazione | Niente job automatici. L'archivio contiene tutto e le istruzioni per ripristinare. |
-| Promemoria | Email SMTP configurabile | Senza SMTP i promemoria restano in coda e partono appena il server email viene attivato. |
+| Promemoria | Push via VAPID, preferenze per profilo | Ogni membro decide quali categorie ricevere e su quali dispositivi. |
 | Deploy | Un container, porta `3080`, volume `./data` | Cloudflare Tunnel si configura dalla dashboard e `cloudflared` gira fuori da questo progetto. |
 
 Dettagli e alternative scartate: [`docs/DECISIONI.md`](docs/DECISIONI.md).
@@ -211,41 +214,20 @@ Poi, da **Impostazioni → Famiglia**, aggiungi gli altri membri con nome, email
 
 Tutta la configurazione sta nel file `.env` (parti da `.env.example`).
 
-### ✉️ Email e promemoria
-
-```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=la-tua-email@gmail.com
-SMTP_PASS=password-per-le-app
-MAIL_FROM="Ghibiri Home <la-tua-email@gmail.com>"
-```
-
-Poi riavvia con `docker compose up -d`.
-
-| Provider | Host | Porta | Note |
-|---|---|---|---|
-| Gmail | `smtp.gmail.com` | 587 | Serve una [password per le app](https://myaccount.google.com/apppasswords), non la password normale. |
-| Brevo | `smtp-relay.brevo.com` | 587 | Piano gratuito generoso; utile se Gmail blocca l'invio. |
-| Fastmail | `smtp.fastmail.com` | 465 | Imposta `SMTP_SECURE=true`. |
-
-Verifica da **Impostazioni → Email e promemoria → Invia email di prova**.
-
-> [!NOTE]
-> Tutte le date sono intese in **Europe/Rome**. L'ora dei promemoria è configurabile (default `09:00`).
-
 ### 🔔 Notifiche push
 
-Le notifiche push sono facoltative e indipendenti dall'email. Genera le chiavi VAPID:
+Le notifiche push sono l'unico canale per i promemoria. Dopo aver aggiornato l'app, genera le chiavi VAPID dal container:
 
-```powershell
-npx web-push generate-vapid-keys
+```bash
+docker compose up -d --build
+docker compose exec ghibiri-home npx web-push generate-vapid-keys
 ```
 
-Copia la chiave pubblica e quella privata nel `.env` (`PUSH_VAPID_PUBLIC_KEY` e `PUSH_VAPID_PRIVATE_KEY`) e imposta `PUSH_VAPID_SUBJECT` con un indirizzo `mailto:` o un URL. Non condividere né committare la chiave privata, poi riavvia con `docker compose up -d`.
+Copia la chiave pubblica e quella privata nel `.env` (`PUSH_VAPID_PUBLIC_KEY` e `PUSH_VAPID_PRIVATE_KEY`) e imposta `PUSH_VAPID_SUBJECT` con un indirizzo `mailto:` o un URL. Non condividere né committare la chiave privata; riavvia poi il container con `docker compose up -d --force-recreate`.
 
-Ogni membro abilita le notifiche dalla sezione **Profilo** sul proprio dispositivo e può usare **Invia una prova**. Serve HTTPS; su iPhone/iPad (iOS/iPadOS 16.4+) occorre prima aggiungere il sito alla schermata Home e aprirlo da lì. L'attivazione è per dispositivo e il tutorial è disponibile nel profilo.
+Ogni membro abilita le notifiche dalla sezione **Profilo** sul proprio dispositivo e può usare **Invia una prova**. Dalla stessa sezione può attivare o sospendere tutte le push e scegliere separatamente **eventi**, **scadenze** e **piante**; queste preferenze valgono per il profilo su tutti i suoi dispositivi. Serve HTTPS; su iPhone/iPad (iOS/iPadOS 16.4+) occorre prima aggiungere il sito alla schermata Home e aprirlo da lì. Il tutorial è disponibile nel profilo.
+
+L'ora e l'anticipo dei promemoria si configurano in **Impostazioni → Promemoria** (fuso orario `Europe/Rome`, ora predefinita `09:00`).
 
 ### 🤖 Ricette con l'AI
 
@@ -431,7 +413,7 @@ Prima di `rm -rf data`, esporta un backup se i dati potrebbero servire ancora.
 │   ├── db.js               schema, hash PIN, impostazioni
 │   ├── auth.js             sessioni, ruoli, lockout
 │   ├── reminders.js        coda promemoria e scheduler
-│   ├── mailer.js           SMTP e template email
+│   ├── reminder-content.js testo dei promemoria push
 │   ├── uploads.js          file, MIME, pulizia
 │   ├── ai.js               provider AI compatibile OpenAI
 │   └── routes/             auth, users, events, deadlines, shopping,
@@ -495,7 +477,7 @@ npm run test:ui           # rendering delle pagine (Vitest + happy-dom, server a
 |---|---|
 | Il browser non apre il sito | `docker compose ps` deve dire `healthy`; la porta è `${APP_PORT}` (default 3080). |
 | Errore 502 dal tunnel | Il public hostname deve puntare a `http://localhost:3080` e `cloudflared` deve essere attivo sull'host (o in un container separato). |
-| Le email non arrivano | SMTP compilato? "Invia email di prova" dà errore? Controlla log, spam e che `MAIL_FROM` sia autorizzato dal provider. |
+| Le push non arrivano | Controlla le chiavi VAPID, HTTPS e i permessi del dispositivo; nel Profilo verifica il toggle generale e la categoria interessata. Prova **Invia una prova**. |
 | "Troppi tentativi" | Attendi 15 minuti oppure reimposta il PIN con `reset-pin.js`. |
 | Upload rifiutato | Limite `MAX_UPLOAD_MB` (15 MB) e tipi ammessi: immagini, PDF, Word, testo. |
 | Date sbagliate di un'ora | Il container deve avere `TZ=Europe/Rome` (già impostato in Compose). |
@@ -511,7 +493,6 @@ npm run test:ui           # rendering delle pagine (Vitest + happy-dom, server a
 Fuori dalla prima versione, **per scelta**. Il modello dati e le API sono già separati per entità, quindi ognuna di queste aggiunte è possibile senza rifare le fondamenta.
 
 - [ ] 📆 Sincronizzazione bidirezionale con Google Calendar
-- [ ] 🔔 Notifiche push native
 - [ ] 🌿 Riconoscimento piante con AI
 - [ ] 🏘️ Multi-famiglia
 - [ ] 💳 Pagamenti automatici delle scadenze

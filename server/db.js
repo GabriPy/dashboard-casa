@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   entity_id INTEGER NOT NULL,
   send_at TEXT NOT NULL,
   occurrence_at TEXT,
-  channel TEXT NOT NULL DEFAULT 'email',
+  channel TEXT NOT NULL DEFAULT 'push',
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sent','failed','cancelled')),
   attempts INTEGER NOT NULL DEFAULT 0,
   sent_at TEXT,
@@ -211,6 +211,15 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
 
+CREATE TABLE IF NOT EXISTS push_preferences (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  events_enabled INTEGER NOT NULL DEFAULT 1,
+  deadlines_enabled INTEGER NOT NULL DEFAULT 1,
+  plants_enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS push_deliveries (
   reminder_id INTEGER REFERENCES reminders(id) ON DELETE SET NULL,
   subscription_id INTEGER NOT NULL REFERENCES push_subscriptions(id) ON DELETE CASCADE,
@@ -238,6 +247,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 
 db.exec(SCHEMA);
 
+db.prepare("UPDATE reminders SET channel = 'push' WHERE channel = 'email'").run();
+db.prepare("DELETE FROM settings WHERE key = 'reminder_email_enabled'").run();
+
 // Migrazioni idempotenti per database creati con versioni precedenti.
 db.prepare(
   `UPDATE plants
@@ -255,7 +267,7 @@ if (!recipeColumns.has('source')) {
 if (!recipeColumns.has('source_prompt')) {
   db.exec('ALTER TABLE recipes ADD COLUMN source_prompt TEXT');
 }
-db.pragma('user_version = 4');
+db.pragma('user_version = 6');
 
 export const nowIso = () => new Date().toISOString();
 
@@ -320,7 +332,6 @@ export function audit(userId, action, entityType = null, entityId = null, detail
 const DEFAULT_SETTINGS = {
   household_name: 'Casa Ghibiri',
   reminder_hour: config.reminderHour,
-  reminder_email_enabled: 'true',
   deadline_offsets: '7,1',
   event_offset_days: '1',
   plant_reminders: 'true',

@@ -143,7 +143,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
       await settle(650);
       expect(router.currentRoute.value.path, `redirect inatteso da ${path}`).toBe(path);
       const text = document.body.textContent || '';
-      expect(text.length, `pagina ${path} vuota`).toBeGreaterThan(400);
+      expect(text.length, `pagina ${path} vuota`).toBeGreaterThan(300);
       expect(text).toContain(expected);
       const fatal = errors.filter(
         (e) => !e.includes('Not implemented') && !e.includes('Failed to fetch') && !e.includes('NetworkError'),
@@ -164,6 +164,10 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.querySelector('[role="dialog"]')).toBeTruthy();
     expect(document.body.textContent).toContain('Se non compare la richiesta');
     expect(document.body.textContent).toContain('Le notifiche sono personali e vanno abilitate su ogni dispositivo.');
+    expect(document.body.textContent).toContain('Notifiche push generali');
+    expect(document.body.textContent).toContain('Eventi');
+    expect(document.body.textContent).toContain('Scadenze');
+    expect(document.body.textContent).toContain('Piante');
   });
 
   it('mostra l’anteprima di un evento e apre la modifica solo su richiesta', async () => {

@@ -63,7 +63,7 @@ self.addEventListener('push', (event) => {
     payload = { body: event.data?.text() || '' };
   }
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Ghibiri Home', {
+    self.registration.showNotification(payload.title || 'Casa Ghibiri', {
       body: payload.body || 'Hai un nuovo promemoria.',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',

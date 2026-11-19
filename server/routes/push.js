@@ -4,7 +4,7 @@ import { config, pushConfigured } from '../config.js';
 import { db, nowIso } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { HttpError, validate } from '../lib/http.js';
-import { sendPushNotification } from '../push.js';
+import { pushTitle, sendPushNotification } from '../push.js';
 
 export const pushRouter = Router();
 pushRouter.use(requireAuth);
@@ -23,6 +23,26 @@ const subscriptionSchema = z.object({
   }),
 });
 
+const defaultPreferences = { enabled: true, events: true, deadlines: true, plants: true };
+const preferencesSchema = z
+  .object({
+    enabled: z.boolean(),
+    events: z.boolean(),
+    deadlines: z.boolean(),
+    plants: z.boolean(),
+  })
+  .strict();
+
+function serializePreferences(row) {
+  if (!row) return defaultPreferences;
+  return {
+    enabled: row.enabled === 1,
+    events: row.events_enabled === 1,
+    deadlines: row.deadlines_enabled === 1,
+    plants: row.plants_enabled === 1,
+  };
+}
+
 pushRouter.get('/status', (req, res) => {
   const subscriptions = db.prepare('SELECT id, created_at FROM push_subscriptions WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
   const endpoint = typeof req.query.endpoint === 'string' ? req.query.endpoint : null;
@@ -34,6 +54,33 @@ pushRouter.get('/status', (req, res) => {
       ? Boolean(db.prepare('SELECT 1 FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').get(req.user.id, endpoint))
       : false,
   });
+});
+
+pushRouter.get('/preferences', (req, res) => {
+  const row = db.prepare('SELECT * FROM push_preferences WHERE user_id = ?').get(req.user.id);
+  res.json({ preferences: serializePreferences(row) });
+});
+
+pushRouter.put('/preferences', (req, res) => {
+  const preferences = validate(preferencesSchema, req.body);
+  db.prepare(
+    `INSERT INTO push_preferences (user_id, enabled, events_enabled, deadlines_enabled, plants_enabled, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       enabled = excluded.enabled,
+       events_enabled = excluded.events_enabled,
+       deadlines_enabled = excluded.deadlines_enabled,
+       plants_enabled = excluded.plants_enabled,
+       updated_at = excluded.updated_at`,
+  ).run(
+    req.user.id,
+    Number(preferences.enabled),
+    Number(preferences.events),
+    Number(preferences.deadlines),
+    Number(preferences.plants),
+    nowIso(),
+  );
+  res.json({ preferences });
 });
 
 pushRouter.post('/subscriptions', (req, res) => {
@@ -57,12 +104,14 @@ pushRouter.delete('/subscriptions', (req, res) => {
 
 pushRouter.post('/test', async (req, res) => {
   if (!pushConfigured()) throw new HttpError(503, 'Notifiche push non configurate sul server.');
+  const preferences = db.prepare('SELECT enabled FROM push_preferences WHERE user_id = ?').get(req.user.id);
+  if (preferences && !preferences.enabled) throw new HttpError(409, 'Attiva prima le notifiche push generali nel profilo.');
   const body = validate(z.object({ endpoint: endpointSchema }), req.body);
   const subscription = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').get(req.user.id, body.endpoint);
   if (!subscription) throw new HttpError(404, 'Questo dispositivo non ha una sottoscrizione attiva.');
 
   const payload = {
-    title: 'Ghibiri Home',
+    title: pushTitle(),
     body: 'Le notifiche push sono attive su questo dispositivo.',
     url: '/',
   };

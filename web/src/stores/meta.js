@@ -6,7 +6,6 @@ export const useMetaStore = defineStore('meta', {
     loaded: false,
     householdName: 'Casa Ghibiri',
     reminderHour: '09:00',
-    emailReminders: false,
     deadlineOffsets: '7,1',
     eventOffsetDays: 1,
     plantReminders: true,

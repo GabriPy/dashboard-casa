@@ -62,7 +62,7 @@ Spesa, ricette, piante e relative foto sono sempre condivise: sono beni della ca
 
 - Colonna `visibility` su `events` e `deadlines`, controllata in ogni query di lettura, modifica ed eliminazione.
 - Gli allegati ereditano la visibilità dell’elemento: un file agganciato a una scadenza privata non è scaricabile dagli altri.
-- Le email di promemoria per un elemento privato vanno solo al creatore.
+- Le notifiche push per un elemento privato vanno solo al creatore.
 - Il backup completo (amministratore) include tutto, compresi i dati privati: è un’esportazione del server, non una vista dell’app.
 
 ---
@@ -97,24 +97,22 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 
 **Cosa contiene.** Snapshot consistente del database (non una copia a caldo del file WAL), tutti gli allegati, `dati.json` senza hash dei PIN, `manifest.json` con conteggi e versione, `LEGGIMI.txt` con procedura di ripristino.
 
-**Cosa non contiene.** Configurazione SMTP e variabili d’ambiente, che restano nel `.env`; le email già inviate.
+**Cosa non contiene.** Variabili d’ambiente e segreti del server (incluse le chiavi VAPID), che restano nel `.env`.
 
 **Ripristino.** Documentato nel README e dentro l’archivio. Va provato almeno una volta.
 
 ---
 
-## 6. Promemoria via email
+## 6. Promemoria push
 
-**Scelta.** Email SMTP, con coda persistente nel database e scheduler ogni minuto.
+**Scelta.** Le notifiche Web Push sono l’unico canale per i promemoria; la coda è persistente nel database e viene controllata dallo scheduler.
 
-- Scadenze: 7 e 1 giorno prima (configurabile, anche il giorno stesso), alle 09:00.
-- Eventi: 1 giorno prima alle 09:00; per le ricorrenze vengono generate le occorrenze future.
+- Scadenze: 7 e 1 giorno prima (configurabile, anche il giorno stesso), all’ora impostata.
+- Eventi: 1 giorno prima; per le ricorrenze vengono generate le occorrenze future.
 - Piante: il giorno in cui l’attività è prevista.
-- Se l’invio fallisce, tre tentativi a 15 minuti di distanza; poi stato `failed` con errore visibile.
-- Se SMTP non è configurato, la coda resta piena e nulla viene perso: i promemoria partono quando il server email viene attivato.
+- Ogni profilo può disattivare tutte le notifiche o singole categorie; le preferenze valgono su tutti i dispositivi del profilo.
+- Il server usa chiavi VAPID; ogni dispositivo deve autorizzare le notifiche e mantenere una sottoscrizione attiva.
 - Un promemoria più vecchio di 48 ore viene annullato invece di arrivare in ritardo.
-
-**Perché non Telegram o push.** Richiesta email. In più l’email arriva anche a chi non installa la PWA e non richiede token o bot da configurare. Le notifiche push native restano fuori scope.
 
 ---
 
@@ -157,7 +155,6 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 | Funzione | Motivo |
 | --- | --- |
 | Sync Google Calendar | Richiede OAuth, gestione token e conflitti; non serve al MVP. |
-| Notifiche push native | L’email copre il bisogno; il push richiede service worker complicati e permessi. |
 | Riconoscimento piante con AI | Costo e dipendenza esterna, contrario alla privacy e al budget zero. |
 | Multi-famiglia commerciale | Il modello dati è già per “household”, ma serve isolamento, inviti e amministrazione. |
 | Pagamenti automatici | Rischio e compliance non giustificati. |

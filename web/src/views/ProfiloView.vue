@@ -26,6 +26,9 @@ const pushPermission = ref('unsupported');
 const pushEnabledHere = ref(false);
 const pushBusy = ref(false);
 const pushTutorialOpen = ref(false);
+const pushPreferences = ref({ enabled: true, events: true, deadlines: true, plants: true });
+const pushPreferencesLoading = ref(true);
+const pushPreferencesSaving = ref(false);
 const secureContext = typeof window !== 'undefined' && window.isSecureContext;
 const isIosDevice =
   typeof navigator !== 'undefined' &&
@@ -141,6 +144,32 @@ async function loadPushStatus() {
   }
 }
 
+async function loadPushPreferences() {
+  try {
+    const result = await api('/api/push/preferences');
+    pushPreferences.value = result.preferences;
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    pushPreferencesLoading.value = false;
+  }
+}
+
+async function togglePushPreference(key) {
+  if (pushPreferencesLoading.value || pushPreferencesSaving.value) return;
+  pushPreferencesSaving.value = true;
+  const updated = { ...pushPreferences.value, [key]: !pushPreferences.value[key] };
+  try {
+    const result = await api('/api/push/preferences', { method: 'PUT', body: updated });
+    pushPreferences.value = result.preferences;
+    ui.success('Preferenze notifiche aggiornate.');
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    pushPreferencesSaving.value = false;
+  }
+}
+
 async function enablePush() {
   if (!pushReady.value || pushBusy.value) return;
   pushBusy.value = true;
@@ -198,7 +227,7 @@ async function disablePush() {
 }
 
 async function testPush() {
-  if (pushBusy.value) return;
+  if (pushBusy.value || !pushPreferences.value.enabled) return;
   pushBusy.value = true;
   try {
     const registration = await navigator.serviceWorker.getRegistration();
@@ -216,7 +245,7 @@ async function testPush() {
 onMounted(async () => {
   if (!auth.user) await auth.refresh();
   fill();
-  await Promise.all([meta.load(), loadPushStatus()]);
+  await Promise.all([meta.load(), loadPushStatus(), loadPushPreferences()]);
 });
 </script>
 
@@ -257,12 +286,81 @@ onMounted(async () => {
         <span v-else-if="!secureContext" class="hint">Le notifiche push richiedono una connessione HTTPS.</span>
         <span v-else-if="!pushStatus.configured" class="hint">Il server deve essere configurato con le chiavi VAPID prima di poterle attivare.</span>
       </div>
+      <div class="push-preferences">
+        <div class="switch-row push-preference-row">
+          <div class="push-preference-copy">
+            <strong>Notifiche push generali</strong>
+            <p class="hint">Sospendi o riattiva tutti i promemoria push del tuo profilo, su ogni dispositivo.</p>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            :class="{ on: pushPreferences.enabled }"
+            role="switch"
+            aria-label="Notifiche push generali"
+            :aria-checked="pushPreferences.enabled"
+            :disabled="pushPreferencesLoading || pushPreferencesSaving"
+            @click="togglePushPreference('enabled')"
+          />
+        </div>
+        <p v-if="!pushPreferences.enabled" class="hint push-paused">Le push sono sospese. Le preferenze per categoria restano salvate.</p>
+        <div class="push-category-list">
+          <div class="switch-row push-preference-row">
+            <div class="push-preference-copy">
+              <strong>Eventi</strong>
+              <p class="hint">Promemoria del calendario.</p>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: pushPreferences.events }"
+              role="switch"
+              aria-label="Notifiche per gli eventi"
+              :aria-checked="pushPreferences.events"
+              :disabled="pushPreferencesLoading || pushPreferencesSaving"
+              @click="togglePushPreference('events')"
+            />
+          </div>
+          <div class="switch-row push-preference-row">
+            <div class="push-preference-copy">
+              <strong>Scadenze</strong>
+              <p class="hint">Promemoria di bollette e altre scadenze.</p>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: pushPreferences.deadlines }"
+              role="switch"
+              aria-label="Notifiche per le scadenze"
+              :aria-checked="pushPreferences.deadlines"
+              :disabled="pushPreferencesLoading || pushPreferencesSaving"
+              @click="togglePushPreference('deadlines')"
+            />
+          </div>
+          <div class="switch-row push-preference-row">
+            <div class="push-preference-copy">
+              <strong>Piante</strong>
+              <p class="hint">Promemoria per annaffiature e altre cure.</p>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: pushPreferences.plants }"
+              role="switch"
+              aria-label="Notifiche per le piante"
+              :aria-checked="pushPreferences.plants"
+              :disabled="pushPreferencesLoading || pushPreferencesSaving"
+              @click="togglePushPreference('plants')"
+            />
+          </div>
+        </div>
+      </div>
       <div class="push-actions">
         <button v-if="!pushEnabledHere" type="button" class="btn btn-primary" :disabled="!pushReady || pushBusy || pushPermission === 'denied'" @click="enablePush">
           <span v-if="pushBusy" class="spinner" /> Attiva su questo dispositivo
         </button>
         <template v-else>
-          <button type="button" class="btn btn-soft" :disabled="pushBusy" @click="testPush">Invia una prova</button>
+          <button type="button" class="btn btn-soft" :disabled="pushBusy || !pushPreferences.enabled" @click="testPush">Invia una prova</button>
           <button type="button" class="btn btn-ghost" :disabled="pushBusy" @click="disablePush">Disattiva</button>
         </template>
         <button type="button" class="btn btn-ghost" @click="pushTutorialOpen = true">Come attivare le notifiche push</button>
@@ -285,7 +383,7 @@ onMounted(async () => {
           <div class="field">
             <label for="p-email">Email</label>
             <input id="p-email" v-model="form.email" class="input" type="email" placeholder="nome@email.it" />
-            <span class="hint">Serve per ricevere i promemoria.</span>
+            <span class="hint">Email di contatto facoltativa.</span>
           </div>
         </div>
 
@@ -481,6 +579,31 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+.push-preferences {
+  margin-top: 18px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.push-preference-row {
+  border-bottom: 1px solid var(--line);
+}
+.push-preference-copy {
+  min-width: 0;
+}
+.push-preference-copy strong {
+  display: block;
+  font-size: 13.5px;
+}
+.push-preference-copy .hint {
+  display: block;
+  margin-top: 3px;
+}
+.push-paused {
+  margin: 10px 0;
+}
+.push-category-list {
+  padding-left: 14px;
 }
 .push-tutorial {
   display: flex;

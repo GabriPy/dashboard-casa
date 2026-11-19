@@ -88,6 +88,27 @@ async function main() {
     }
   });
 
+  await step('preferenze push per profilo e categoria', async () => {
+    const defaults = { enabled: true, events: true, deadlines: true, plants: true };
+    const adminPreferences = { ...defaults, events: false, plants: false };
+    const savedAdmin = await call('/api/push/preferences', { method: 'PUT', body: adminPreferences });
+    assert.deepEqual(savedAdmin.data.preferences, adminPreferences);
+    assert.deepEqual((await call('/api/push/preferences')).data.preferences, adminPreferences);
+
+    await login(2, MAMMA_PIN);
+    assert.deepEqual((await call('/api/push/preferences')).data.preferences, defaults);
+    const memberPreferences = { ...defaults, enabled: false, deadlines: false };
+    const savedMember = await call('/api/push/preferences', { method: 'PUT', body: memberPreferences });
+    assert.deepEqual(savedMember.data.preferences, memberPreferences);
+
+    await login(1, ADMIN_PIN);
+    assert.deepEqual((await call('/api/push/preferences')).data.preferences, adminPreferences);
+    await call('/api/push/preferences', { method: 'PUT', body: defaults });
+    await login(2, MAMMA_PIN);
+    await call('/api/push/preferences', { method: 'PUT', body: defaults });
+    await login(1, ADMIN_PIN);
+  });
+
   await step('dashboard', async () => {
     const { status, data } = await call('/api/dashboard');
     assert.equal(status, 200);
@@ -419,14 +440,16 @@ async function main() {
   await step('impostazioni e coda promemoria', async () => {
     const before = await call('/api/settings');
     assert.equal(before.status, 200);
+    assert.equal('mail' in before.data, false);
     const patched = await call('/api/settings', { method: 'PATCH', body: { household_name: 'Casa Ghibiri' } });
     assert.equal(patched.status, 200);
     assert.equal(patched.data.settings.household_name, 'Casa Ghibiri');
-    const test = await call('/api/settings/test-email', { method: 'POST', body: {} });
-    const health = await call('/api/health');
-    if (health.data.email === 'not_configured') {
-      assert.equal(test.status, 400, 'senza SMTP deve rispondere 400');
-    }
+    const emailRoute = await call('/api/settings/test-email', { method: 'POST', body: {} });
+    assert.equal(emailRoute.status, 404);
+    const run = await call('/api/settings/run-reminders', { method: 'POST', body: {} });
+    assert.equal(run.status, 200);
+    assert.equal(typeof run.data.stats.pushSent, 'number');
+    assert.equal(typeof run.data.stats.pushFailed, 'number');
     const reminders = await call('/api/settings');
     assert.ok(reminders.data.reminders.length >= 1, 'la coda promemoria deve avere elementi');
   });
@@ -465,6 +488,8 @@ async function main() {
     assert.equal(me.status, 401);
     const pushStatus = await call('/api/push/status');
     assert.equal(pushStatus.status, 401);
+    const pushPreferences = await call('/api/push/preferences');
+    assert.equal(pushPreferences.status, 401);
   });
 
   const failed = results.filter((r) => !r.ok);

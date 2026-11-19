@@ -3,9 +3,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { allSettings, audit, db, getSetting, setSetting } from '../db.js';
 import { requireAdmin, requireAuth } from '../auth.js';
-import { config, smtpConfigured } from '../config.js';
+import { config } from '../config.js';
 import { HttpError, validate } from '../lib/http.js';
-import { mailStatus, sendTestEmail } from '../mailer.js';
 import { dirSize } from '../uploads.js';
 import { processDueReminders, refreshRecurringEvents, syncDeadlineReminders, syncEventReminders, syncPlantTaskReminders } from '../reminders.js';
 import { aiStatus, checkProvider } from '../ai.js';
@@ -15,7 +14,6 @@ export const settingsRouter = Router();
 const ALLOWED_KEYS = new Set([
   'household_name',
   'reminder_hour',
-  'reminder_email_enabled',
   'deadline_offsets',
   'event_offset_days',
   'plant_reminders',
@@ -24,7 +22,6 @@ const ALLOWED_KEYS = new Set([
 const valuesSchema = z.object({
   household_name: z.string().trim().min(1).max(60).optional(),
   reminder_hour: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Orario non valido.').optional(),
-  reminder_email_enabled: z.boolean().optional(),
   deadline_offsets: z
     .string()
     .regex(/^\d{1,2}(,\d{1,2}){0,3}$/, 'Indica da 1 a 4 giorni, separati da virgola.')
@@ -54,7 +51,6 @@ settingsRouter.get('/public', requireAuth, (_req, res) => {
   res.json({
     householdName: getSetting('household_name', 'Casa Ghibiri'),
     reminderHour: getSetting('reminder_hour', config.reminderHour),
-    emailReminders: getSetting('reminder_email_enabled', 'true') === 'true' && smtpConfigured(),
     deadlineOffsets: getSetting('deadline_offsets', '7,1'),
     eventOffsetDays: Number(getSetting('event_offset_days', '1')),
     plantReminders: getSetting('plant_reminders', 'true') === 'true',
@@ -79,17 +75,13 @@ settingsRouter.get('/', requireAdmin, (_req, res) => {
        FROM reminders r WHERE r.status = 'pending' ORDER BY r.send_at ASC LIMIT 25`,
     )
     .all();
-  const sentCount = db.prepare("SELECT COUNT(*) AS n FROM reminders WHERE status = 'sent'").get().n;
-  const failedCount = db.prepare("SELECT COUNT(*) AS n FROM reminders WHERE status = 'failed'").get().n;
   const lastBackup = db
     .prepare("SELECT created_at, detail FROM audit_log WHERE action = 'export_backup' ORDER BY id DESC LIMIT 1")
     .get();
   res.json({
     settings,
-    mail: mailStatus(),
     storage: storageStats(),
     reminders: reminderQueue,
-    reminderStats: { sent: sentCount, failed: failedCount },
     lastBackupAt: lastBackup?.created_at || null,
     maxUploadMb: config.maxUploadMb,
     ai: aiStatus(),
@@ -108,7 +100,7 @@ settingsRouter.patch('/', requireAdmin, (req, res) => {
   if (!changed.length) throw new HttpError(400, 'Nessuna impostazione da salvare.');
   audit(req.user.id, 'update_settings', null, null, { changed });
 
-  if (changed.some((key) => ['reminder_email_enabled', 'deadline_offsets', 'event_offset_days', 'plant_reminders', 'reminder_hour'].includes(key))) {
+  if (changed.some((key) => ['deadline_offsets', 'event_offset_days', 'plant_reminders', 'reminder_hour'].includes(key))) {
     for (const row of db.prepare("SELECT * FROM deadlines WHERE status = 'open'").all()) syncDeadlineReminders(row);
     for (const row of db.prepare('SELECT * FROM events').all()) syncEventReminders(row);
     for (const task of db.prepare('SELECT id FROM plant_tasks').all()) syncPlantTaskReminders(task.id);
@@ -116,22 +108,9 @@ settingsRouter.patch('/', requireAdmin, (req, res) => {
   res.json({ settings: allSettings() });
 });
 
-settingsRouter.post('/test-email', requireAdmin, async (req, res) => {
-  if (!smtpConfigured()) {
-    throw new HttpError(400, 'SMTP non configurato. Imposta SMTP_HOST, SMTP_USER e SMTP_PASS nel file .env.');
-  }
-  const body = validate(
-    z.object({ to: z.union([z.string().trim().email(), z.literal(''), z.undefined()]).optional() }),
-    req.body || {},
-  );
-  await sendTestEmail(body.to || null);
-  audit(req.user.id, 'test_email', null, null, { to: body.to || 'primo indirizzo disponibile' });
-  res.json({ ok: true, message: 'Email di prova inviata.' });
-});
-
 settingsRouter.post('/run-reminders', requireAdmin, async (req, res) => {
-  const stats = await processDueReminders({ force: true });
-  res.json({ stats, mail: mailStatus() });
+  const stats = await processDueReminders();
+  res.json({ stats });
 });
 
 settingsRouter.post('/test-ai', requireAdmin, async (req, res) => {

@@ -1,4 +1,4 @@
-import { config, smtpConfigured } from './config.js';
+import { config, pushConfigured } from './config.js';
 import { db, seed } from './db.js';
 import { createApp } from './app.js';
 import { startScheduler } from './reminders.js';
@@ -16,7 +16,7 @@ const server = app.listen(config.port, config.host, () => {
   console.log(`  URL       ${config.appUrl}`);
   console.log(`  Ascolto   ${config.host}:${config.port}`);
   console.log(`  Dati      ${config.dataDir}`);
-  console.log(`  Email     ${smtpConfigured() ? `SMTP ${config.smtp.host}` : 'non configurata (promemoria in coda)'}`);
+  console.log(`  Promemoria push ${pushConfigured() ? 'configurati' : 'non configurati'}`);
   console.log(line);
 });
 

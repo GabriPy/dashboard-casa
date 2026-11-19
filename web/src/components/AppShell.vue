@@ -136,10 +136,10 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="side-foot">
-        <div class="reminder-status">
-          <span class="status-dot" :class="{ on: meta.emailReminders }" />
-          <span>{{ meta.emailReminders ? 'Promemoria via email attivi' : 'Promemoria email da attivare' }}</span>
-        </div>
+        <RouterLink to="/profilo" class="reminder-status">
+          <Icon name="bell" :size="14" />
+          <span>Gestisci notifiche push</span>
+        </RouterLink>
         <div class="user-chip">
           <RouterLink to="/profilo" class="user-link">
             <Avatar :name="auth.user?.name" :emoji="auth.user?.emoji" :color="auth.user?.color" :size="36" />
@@ -405,19 +405,14 @@ onBeforeUnmount(() => {
   gap: 7px;
   font-size: 10.5px;
   color: var(--muted);
-  padding: 0 6px;
+  padding: 6px;
   line-height: 1.35;
+  text-decoration: none;
+  border-radius: 8px;
 }
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--line-strong);
-  flex: none;
-}
-.status-dot.on {
-  background: #6e946b;
-  box-shadow: 0 0 0 3px rgba(110, 148, 107, 0.16);
+.reminder-status:hover {
+  color: var(--ink);
+  background: var(--surface-2);
 }
 .user-chip {
   display: flex;

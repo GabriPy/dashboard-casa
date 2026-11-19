@@ -6,7 +6,8 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
-import { config, smtpConfigured } from './config.js'; import { authMiddleware } from './auth.js';
+import { config } from './config.js';
+import { authMiddleware } from './auth.js';
 import { HttpError } from './lib/http.js';
 import { db } from './db.js';
 import { authRouter } from './routes/auth.js';
@@ -105,7 +106,6 @@ export function createApp() {
       version: process.env.APP_VERSION || '1.0.0',
       time: new Date().toISOString(),
       database,
-      email: smtpConfigured() ? 'configured' : 'not_configured',
       uptime: Math.round(process.uptime()),
     });
   });

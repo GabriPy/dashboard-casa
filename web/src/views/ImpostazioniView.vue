@@ -20,7 +20,6 @@ const loading = ref(true);
 const data = ref(null);
 const users = ref([]);
 const savingSettings = ref(false);
-const testing = ref(false);
 const testingAi = ref(false);
 const exporting = ref(false);
 const running = ref(false);
@@ -43,7 +42,6 @@ const savingUser = ref(false);
 const settingsForm = reactive({
   household_name: 'Casa Ghibiri',
   reminder_hour: '09:00',
-  reminder_email_enabled: true,
   deadline_offsets: '7,1',
   event_offset_days: 1,
   plant_reminders: true,
@@ -63,13 +61,12 @@ const offsets = computed(() =>
     .filter((v) => Number.isFinite(v)),
 );
 
-const emailConfigured = computed(() => Boolean(data.value?.mail?.configured));
 const pendingReminders = computed(() => data.value?.reminders || []);
 
 const tabs = [
   { id: 'casa', label: 'Casa', icon: 'home' },
   { id: 'famiglia', label: 'Famiglia', icon: 'users' },
-  { id: 'email', label: 'Email e promemoria', icon: 'mail' },
+  { id: 'promemoria', label: 'Promemoria', icon: 'clock' },
   { id: 'ai', label: 'Ricette AI', icon: 'sparkle' },
   { id: 'backup', label: 'Backup', icon: 'database' },
 ];
@@ -95,7 +92,6 @@ async function load() {
     Object.assign(settingsForm, {
       household_name: settingsData.settings.household_name || 'Casa Ghibiri',
       reminder_hour: settingsData.settings.reminder_hour || '09:00',
-      reminder_email_enabled: settingsData.settings.reminder_email_enabled === 'true',
       deadline_offsets: settingsData.settings.deadline_offsets || '7,1',
       event_offset_days: Number(settingsData.settings.event_offset_days || 1),
       plant_reminders: settingsData.settings.plant_reminders === 'true',
@@ -115,7 +111,6 @@ async function saveSettings() {
       body: {
         household_name: settingsForm.household_name,
         reminder_hour: settingsForm.reminder_hour,
-        reminder_email_enabled: settingsForm.reminder_email_enabled,
         deadline_offsets: settingsForm.deadline_offsets,
         event_offset_days: Number(settingsForm.event_offset_days),
         plant_reminders: settingsForm.plant_reminders,
@@ -128,18 +123,6 @@ async function saveSettings() {
     ui.error(err.message);
   } finally {
     savingSettings.value = false;
-  }
-}
-
-async function testEmail() {
-  testing.value = true;
-  try {
-    await api('/api/settings/test-email', { method: 'POST', body: {} });
-    ui.success('Email di prova inviata: controlla la casella.');
-  } catch (err) {
-    ui.error(err.message);
-  } finally {
-    testing.value = false;
   }
 }
 
@@ -162,7 +145,7 @@ async function checkReminders() {
   try {
     const result = await api('/api/settings/run-reminders', { method: 'POST' });
     const stats = result.stats || {};
-    ui.success(`Controllo completato: ${stats.sent || 0} inviati, ${stats.failed || 0} falliti, ${stats.cancelled || 0} annullati.`);
+    ui.success(`Controllo completato: ${stats.pushSent || 0} notifiche inviate, ${stats.pushFailed || 0} fallite.`);
     await load();
   } catch (err) {
     ui.error(err.message);
@@ -311,7 +294,7 @@ onMounted(load);
 
 <template>
   <div class="page-stack settings-page">
-    <PageHeader eyebrow="Amministrazione" title="Impostazioni" subtitle="La casa, le persone, le email e i backup." />
+    <PageHeader eyebrow="Amministrazione" title="Impostazioni" subtitle="La casa, le persone, i promemoria e i backup." />
 
     <div class="tabs">
       <button v-for="t in tabs" :key="t.id" type="button" class="tab" :class="{ active: tab === t.id }" @click="tab = t.id">
@@ -328,7 +311,7 @@ onMounted(load);
             <div>
               <p class="eyebrow">Identità</p>
               <h2>La casa</h2>
-              <p class="card-note">Il nome che compare nell’app e nelle email.</p>
+              <p class="card-note">Il nome che compare nell’app e nelle notifiche.</p>
             </div>
           </header>
           <div class="field">
@@ -337,67 +320,6 @@ onMounted(load);
           </div>
         </div>
 
-        <div class="card">
-          <header class="card-head">
-            <div>
-              <p class="eyebrow">Promemoria</p>
-              <h2>Quando avvisare</h2>
-              <p class="card-note">Le email partono nel fuso orario Europe/Rome.</p>
-            </div>
-            <span class="switch" :class="{ on: settingsForm.reminder_email_enabled }" role="switch" :aria-checked="settingsForm.reminder_email_enabled" @click="settingsForm.reminder_email_enabled = !settingsForm.reminder_email_enabled" />
-          </header>
-
-          <div class="settings-grid">
-            <div class="field">
-              <label for="rem-hour">Ora dei promemoria</label>
-              <input id="rem-hour" v-model="settingsForm.reminder_hour" class="input" type="time" />
-              <span class="hint">Es. 09:00 per la mattina.</span>
-            </div>
-            <div class="field">
-              <label for="ev-offset">Eventi: quanti giorni prima</label>
-              <select id="ev-offset" v-model.number="settingsForm.event_offset_days" class="select">
-                <option :value="0">Il giorno stesso</option>
-                <option :value="1">1 giorno prima</option>
-                <option :value="2">2 giorni prima</option>
-                <option :value="3">3 giorni prima</option>
-                <option :value="7">1 settimana prima</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="field" style="margin-top: 16px">
-            <label>Scadenze: quanti giorni prima</label>
-            <div class="offset-row">
-              <button
-                v-for="opt in offsetOptions"
-                :key="opt.value"
-                type="button"
-                class="chip"
-                :class="{ active: offsets.includes(opt.value) }"
-                @click="toggleOffset(opt.value)"
-              >
-                <Icon :name="offsets.includes(opt.value) ? 'check' : 'plus'" :size="12" />
-                {{ opt.label }}
-              </button>
-            </div>
-            <span class="hint">Puoi sceglierne più di uno. Il giorno stesso arriva alle {{ settingsForm.reminder_hour }}.</span>
-          </div>
-
-          <div class="switch-row" style="margin-top: 10px">
-            <div>
-              <strong class="strong">Promemoria per le piante</strong>
-              <p class="hint">Un’email il giorno in cui una pianta va annaffiata o curata.</p>
-            </div>
-            <button type="button" class="switch" :class="{ on: settingsForm.plant_reminders }" role="switch" :aria-checked="settingsForm.plant_reminders" @click="settingsForm.plant_reminders = !settingsForm.plant_reminders" />
-          </div>
-
-          <div class="settings-foot">
-            <span v-if="!emailConfigured" class="badge badge-danger"><Icon name="alert" :size="11" /> SMTP non configurato</span>
-            <button type="button" class="btn btn-primary" :disabled="savingSettings" @click="saveSettings">
-              <span v-if="savingSettings" class="spinner" /> Salva impostazioni
-            </button>
-          </div>
-        </div>
       </section>
 
       <section v-if="tab === 'famiglia'" class="page-stack">
@@ -446,59 +368,76 @@ onMounted(load);
         </div>
       </section>
 
-      <section v-if="tab === 'email'" class="page-stack">
-        <div class="card" :class="emailConfigured ? 'card-sage' : 'card-gold'">
+      <section v-if="tab === 'promemoria'" class="page-stack">
+        <div class="card">
           <header class="card-head">
             <div>
-              <p class="eyebrow">Posta in uscita</p>
-              <h2>{{ emailConfigured ? 'Email configurate' : 'Email da configurare' }}</h2>
-              <p class="card-note">
-                {{ emailConfigured ? `Server: ${data.mail.host} · da ${data.mail.from}` : 'Senza SMTP i promemoria restano in coda e non partono.' }}
-              </p>
+              <p class="eyebrow">Notifiche push</p>
+              <h2>Quando avvisare</h2>
+              <p class="card-note">I promemoria vengono inviati come notifiche push nel fuso orario Europe/Rome.</p>
             </div>
-            <span class="badge" :class="emailConfigured ? 'badge-sage' : 'badge-gold'">
-              {{ emailConfigured ? 'attivo' : 'da attivare' }}
-            </span>
           </header>
 
-          <div class="mail-stats">
-            <div class="mail-stat">
-              <strong>{{ data.mail.recipients }}</strong>
-              <span>destinatari con email</span>
+          <div class="settings-grid">
+            <div class="field">
+              <label for="rem-hour">Ora dei promemoria</label>
+              <input id="rem-hour" v-model="settingsForm.reminder_hour" class="input" type="time" />
+              <span class="hint">Es. 09:00 per la mattina.</span>
             </div>
-            <div class="mail-stat">
-              <strong>{{ data.reminderStats.sent }}</strong>
-              <span>promemoria inviati</span>
-            </div>
-            <div class="mail-stat">
-              <strong>{{ data.reminderStats.failed }}</strong>
-              <span>falliti</span>
+            <div class="field">
+              <label for="ev-offset">Eventi: quanti giorni prima</label>
+              <select id="ev-offset" v-model.number="settingsForm.event_offset_days" class="select">
+                <option :value="0">Il giorno stesso</option>
+                <option :value="1">1 giorno prima</option>
+                <option :value="2">2 giorni prima</option>
+                <option :value="3">3 giorni prima</option>
+                <option :value="7">1 settimana prima</option>
+              </select>
             </div>
           </div>
 
-          <div v-if="!emailConfigured" class="panel-note" style="margin-top: 14px">
-            <p class="strong" style="margin-bottom: 6px">Come attivarle</p>
-            <p>Nel file <code>.env</code> del server imposta <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code> e <code>MAIL_FROM</code>, poi riavvia il container. Con Gmail serve una password per le app.</p>
+          <div class="field" style="margin-top: 16px">
+            <label>Scadenze: quanti giorni prima</label>
+            <div class="offset-row">
+              <button
+                v-for="opt in offsetOptions"
+                :key="opt.value"
+                type="button"
+                class="chip"
+                :class="{ active: offsets.includes(opt.value) }"
+                @click="toggleOffset(opt.value)"
+              >
+                <Icon :name="offsets.includes(opt.value) ? 'check' : 'plus'" :size="12" />
+                {{ opt.label }}
+              </button>
+            </div>
+            <span class="hint">Puoi sceglierne più di uno. Il giorno stesso arriva alle {{ settingsForm.reminder_hour }}.</span>
+          </div>
+
+          <div class="switch-row" style="margin-top: 10px">
+            <div>
+              <strong class="strong">Promemoria per le piante</strong>
+              <p class="hint">Un avviso push il giorno in cui una pianta va annaffiata o curata.</p>
+            </div>
+            <button type="button" class="switch" :class="{ on: settingsForm.plant_reminders }" role="switch" :aria-checked="settingsForm.plant_reminders" @click="settingsForm.plant_reminders = !settingsForm.plant_reminders" />
           </div>
 
           <div class="settings-foot">
-            <button type="button" class="btn btn-ghost" :disabled="!emailConfigured || testing" @click="testEmail">
-              <span v-if="testing" class="spinner" />
-              <Icon v-else name="mail" :size="16" /> Invia email di prova
-            </button>
-            <button type="button" class="btn btn-primary" :disabled="running" @click="checkReminders">
+            <button type="button" class="btn btn-ghost" :disabled="running" @click="checkReminders">
               <span v-if="running" class="spinner" />
               <Icon v-else name="refresh" :size="16" /> Controlla ora
             </button>
+            <button type="button" class="btn btn-primary" :disabled="savingSettings" @click="saveSettings">
+              <span v-if="savingSettings" class="spinner" /> Salva impostazioni
+            </button>
           </div>
-          <p v-if="data.mail.lastError" class="error-text" style="margin-top: 10px">Ultimo errore SMTP: {{ data.mail.lastError }}</p>
         </div>
 
         <div class="card">
           <header class="card-head">
             <div>
               <p class="eyebrow">In coda</p>
-              <h2>Prossimi promemoria</h2>
+              <h2>Prossime notifiche push</h2>
               <p class="card-note">Generati automaticamente quando crei scadenze, eventi e attività delle piante.</p>
             </div>
             <button type="button" class="btn btn-ghost btn-sm" :disabled="resyncing" @click="resyncReminders">
@@ -532,20 +471,20 @@ onMounted(load);
             </span>
           </header>
 
-          <div class="mail-stats">
-            <div class="mail-stat">
+          <div class="detail-stats">
+            <div class="detail-stat">
               <strong>{{ data.ai.model || '—' }}</strong>
               <span>modello</span>
             </div>
-            <div class="mail-stat">
+            <div class="detail-stat">
               <strong>{{ data.ai.baseUrl ? data.ai.baseUrl.replace(/^https?:\/\//, '') : '—' }}</strong>
               <span>endpoint</span>
             </div>
-            <div class="mail-stat">
+            <div class="detail-stat">
               <strong>{{ data.ai.keySet ? 'sì' : 'no' }}</strong>
               <span>chiave API</span>
             </div>
-            <div class="mail-stat">
+            <div class="detail-stat">
               <strong>{{ Math.round((data.ai.timeoutMs || 0) / 1000) }}s</strong>
               <span>timeout</span>
             </div>
@@ -642,7 +581,7 @@ AI_API_KEY=gsk_...</pre>
               <div><strong>{{ data.storage.attachments }}</strong><span>allegati totali</span></div>
             </div>
           </div>
-          <p class="hint" style="margin-top: 14px">Limite per file: {{ data.maxUploadMb }} MB. Il backup NON include le email o le impostazioni SMTP, che restano nel file .env.</p>
+          <p class="hint" style="margin-top: 14px">Limite per file: {{ data.maxUploadMb }} MB. Il backup non include le chiavi VAPID o le altre variabili del server nel file .env.</p>
         </div>
 
         <div class="panel-note">
@@ -662,7 +601,7 @@ AI_API_KEY=gsk_...</pre>
           <div class="field">
             <label for="u-email">Email</label>
             <input id="u-email" v-model="userForm.email" class="input" type="email" placeholder="nome@email.it" />
-            <span class="hint">Dove riceve i promemoria.</span>
+            <span class="hint">Email di contatto facoltativa.</span>
           </div>
         </div>
 
@@ -785,22 +724,22 @@ code {
 .dot-sep {
   color: var(--line-strong);
 }
-.mail-stats {
+.detail-stats {
   display: flex;
   gap: 26px;
   flex-wrap: wrap;
 }
-.mail-stat {
+.detail-stat {
   display: flex;
   flex-direction: column;
 }
-.mail-stat strong {
+.detail-stat strong {
   font-family: var(--font-serif);
   font-size: 26px;
   font-weight: 600;
   line-height: 1.1;
 }
-.mail-stat span {
+.detail-stat span {
   font-size: 11px;
   color: var(--muted);
 }

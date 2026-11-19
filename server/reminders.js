@@ -1,10 +1,9 @@
-import { config, smtpConfigured } from './config.js';
+import { config } from './config.js';
 import { db, getSetting, nowIso } from './db.js';
-import { buildReminderContent, reminderRecipients, sendMail } from './mailer.js';
+import { buildReminderContent } from './reminder-content.js';
 import { addDays, expandRecurrence, isoToLocalDate, localDateTimeToIso, todayLocal } from './lib/time.js';
-import { pushConfigured, sendPushNotification } from './push.js';
+import { pushConfigured, pushTitle, sendPushNotification } from './push.js';
 
-const RETRY_MINUTES = 15;
 const MAX_ATTEMPTS = 3;
 
 function deletePendingAuto(entityType, entityId) {
@@ -25,7 +24,7 @@ function insertReminder({ entityType, entityId, sendAt, occurrenceAt = null }) {
   if (exists) return;
   db.prepare(
     `INSERT INTO reminders (entity_type, entity_id, send_at, occurrence_at, channel, status, source, created_at)
-     VALUES (?, ?, ?, ?, 'email', 'pending', 'auto', ?)`,
+     VALUES (?, ?, ?, ?, 'push', 'pending', 'auto', ?)`,
   ).run(entityType, entityId, sendAt, occurrenceAt, nowIso());
 }
 
@@ -156,7 +155,7 @@ async function processDuePushReminders(now) {
   const reminders = db
     .prepare(
       `SELECT * FROM reminders
-       WHERE channel = 'email' AND status <> 'cancelled' AND send_at <= ? AND send_at >= ?
+       WHERE channel = 'push' AND status IN ('pending', 'failed') AND send_at <= ? AND send_at >= ?
        ORDER BY send_at ASC LIMIT 100`,
     )
     .all(now, cutoff);
@@ -167,11 +166,19 @@ async function processDuePushReminders(now) {
      ON CONFLICT(subscription_id, dedupe_key) DO UPDATE SET reminder_id = excluded.reminder_id
      WHERE push_deliveries.status = 'pending'`,
   );
-  const subscriptionsForReminder = db.prepare(
-    `SELECT s.* FROM push_subscriptions s
-     JOIN users u ON u.id = s.user_id AND u.is_active = 1
-     WHERE (? = 1 OR u.id = ?)`,
-  );
+  const subscriptionsForCategory = (categoryColumn) =>
+    db.prepare(
+      `SELECT s.* FROM push_subscriptions s
+       JOIN users u ON u.id = s.user_id AND u.is_active = 1
+       LEFT JOIN push_preferences p ON p.user_id = u.id
+       WHERE COALESCE(p.enabled, 1) = 1 AND COALESCE(p.${categoryColumn}, 1) = 1
+         AND (? = 1 OR u.id = ?)`,
+    );
+  const subscriptionsByEntity = {
+    event: subscriptionsForCategory('events_enabled'),
+    deadline: subscriptionsForCategory('deadlines_enabled'),
+    plant_task: subscriptionsForCategory('plants_enabled'),
+  };
   const pendingDeliveries = db.prepare(
     `SELECT d.reminder_id, d.subscription_id, d.attempts, s.user_id, s.endpoint, s.p256dh, s.auth
      FROM push_deliveries d JOIN push_subscriptions s ON s.id = d.subscription_id
@@ -185,11 +192,14 @@ async function processDuePushReminders(now) {
     const entity = loadReminderEntity(reminder.entity_type, reminder.entity_id);
     if (!entity || (reminder.entity_type === 'deadline' && entity.status !== 'open')) continue;
     const isPrivate = ['event', 'deadline'].includes(reminder.entity_type) && entity.visibility === 'private';
+    const subscriptions = subscriptionsByEntity[reminder.entity_type];
+    if (!subscriptions) continue;
     const targets = isPrivate
       ? entity.created_by
-        ? subscriptionsForReminder.all(0, entity.created_by)
+        ? subscriptions.all(0, entity.created_by)
         : []
-      : subscriptionsForReminder.all(1, null);
+      : subscriptions.all(1, null);
+    const targetIds = new Set(targets.map((subscription) => subscription.id));
     for (const subscription of targets) {
       saveDelivery.run(
         reminder.id,
@@ -200,12 +210,19 @@ async function processDuePushReminders(now) {
     }
 
     const content = buildReminderContent(reminder.entity_type, entity, reminder);
+    const textLines = content.text.split('\n').filter(Boolean);
     const payload = {
-      title: content.subject,
-      body: content.text.split('\n').filter(Boolean).slice(1, 3).join(' · ').slice(0, 180),
+      title: pushTitle(),
+      body: [content.subject, ...textLines.slice(1, 3)].filter(Boolean).join(' · ').slice(0, 180),
       url: pushPath(reminder.entity_type),
     };
     for (const delivery of pendingDeliveries.all(reminder.id, MAX_ATTEMPTS)) {
+      if (!targetIds.has(delivery.subscription_id)) {
+        db.prepare(
+          "UPDATE push_deliveries SET status = 'failed', last_error = ? WHERE reminder_id = ? AND subscription_id = ?",
+        ).run('Notifica disattivata o non più condivisa', reminder.id, delivery.subscription_id);
+        continue;
+      }
       try {
         await sendPushNotification(delivery, payload);
         db.prepare(
@@ -236,10 +253,10 @@ async function processDuePushReminders(now) {
 
 let running = false;
 
-export async function processDueReminders({ force = false } = {}) {
+export async function processDueReminders() {
   if (running) return { skipped: 'already_running' };
   running = true;
-  const stats = { sent: 0, failed: 0, cancelled: 0, retried: 0 };
+  const stats = { pushSent: 0, pushFailed: 0, cancelled: 0 };
   try {
     const now = nowIso();
     db.prepare(
@@ -249,68 +266,6 @@ export async function processDueReminders({ force = false } = {}) {
     const pushStats = await processDuePushReminders(now);
     stats.pushSent = pushStats.sent;
     stats.pushFailed = pushStats.failed;
-
-    if (!smtpConfigured() && !force) return { ...stats, skipped: 'smtp_not_configured' };
-    if (getSetting('reminder_email_enabled', 'true') !== 'true' && !force) return { ...stats, skipped: 'disabled' };
-
-    const due = db
-      .prepare("SELECT * FROM reminders WHERE status = 'pending' AND send_at <= ? ORDER BY send_at ASC LIMIT 40")
-      .all(now);
-
-    for (const reminder of due) {
-      const entity = loadReminderEntity(reminder.entity_type, reminder.entity_id);
-      if (!entity) {
-        db.prepare("UPDATE reminders SET status = 'cancelled', last_error = 'elemento eliminato' WHERE id = ?").run(reminder.id);
-        stats.cancelled += 1;
-        continue;
-      }
-      if (reminder.entity_type === 'deadline' && entity.status !== 'open') {
-        db.prepare("UPDATE reminders SET status = 'cancelled', last_error = 'scadenza completata' WHERE id = ?").run(reminder.id);
-        stats.cancelled += 1;
-        continue;
-      }
-
-      const recipients = reminderRecipients(reminder.entity_type, entity);
-      if (!recipients.length) {
-        db.prepare(
-          "UPDATE reminders SET status = 'failed', last_error = 'nessun indirizzo email configurato' WHERE id = ?",
-        ).run(reminder.id);
-        stats.failed += 1;
-        continue;
-      }
-
-      try {
-        const content = buildReminderContent(reminder.entity_type, entity, reminder);
-        await sendMail({ to: recipients.map((r) => r.email).join(', '), ...content });
-        db.prepare("UPDATE reminders SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = NULL WHERE id = ?").run(
-          nowIso(),
-          reminder.id,
-        );
-        stats.sent += 1;
-        console.log(`[promemoria] inviato: ${content.subject} → ${recipients.map((r) => r.email).join(', ')}`);
-      } catch (err) {
-        const attempts = reminder.attempts + 1;
-        if (attempts >= MAX_ATTEMPTS) {
-          db.prepare("UPDATE reminders SET status = 'failed', attempts = ?, last_error = ? WHERE id = ?").run(
-            attempts,
-            String(err.message).slice(0, 500),
-            reminder.id,
-          );
-          stats.failed += 1;
-          console.error(`[promemoria] fallito definitivamente #${reminder.id}: ${err.message}`);
-        } else {
-          const next = new Date(Date.now() + RETRY_MINUTES * 60_000).toISOString();
-          db.prepare('UPDATE reminders SET attempts = ?, send_at = ?, last_error = ? WHERE id = ?').run(
-            attempts,
-            next,
-            String(err.message).slice(0, 500),
-            reminder.id,
-          );
-          stats.retried += 1;
-          console.warn(`[promemoria] errore #${reminder.id}, riprovo fra ${RETRY_MINUTES} minuti: ${err.message}`);
-        }
-      }
-    }
     return stats;
   } finally {
     running = false;

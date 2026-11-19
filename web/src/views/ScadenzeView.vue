@@ -82,9 +82,8 @@ const reminderText = computed(() => {
     .split(',')
     .map((n) => Number(n))
     .filter((n) => Number.isFinite(n));
-  if (!meta.emailReminders) return 'Promemoria email non attivi: li trovi comunque qui e in Oggi.';
   const labels = offsets.map((n) => (n === 0 ? 'il giorno stesso' : n === 1 ? 'il giorno prima' : `${n} giorni prima`));
-  return `Ti avviseremo via email ${labels.join(' e ')} alle ${meta.reminderHour}.`;
+  return `Se le notifiche push per le scadenze sono attive nel Profilo, riceverai promemoria ${labels.join(' e ')} alle ${meta.reminderHour}.`;
 });
 
 async function load() {

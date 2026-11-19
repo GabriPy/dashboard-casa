@@ -65,15 +65,6 @@ export const config = {
       ? String(process.env.AI_JSON_MODE).toLowerCase()
       : 'object',
   },
-  smtp: {
-    host: process.env.SMTP_HOST || '',
-    port: int(process.env.SMTP_PORT, 587),
-    secure: bool(process.env.SMTP_SECURE, false),
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || '',
-    from: process.env.MAIL_FROM || 'Ghibiri Home <no-reply@ghibiri.it>',
-    replyTo: process.env.MAIL_REPLY_TO || '',
-  },
   seed: {
     adminPin: process.env.ADMIN_PIN || '',
     adminName: process.env.ADMIN_NAME || 'Gabriele',
@@ -84,10 +75,6 @@ export const config = {
     demo: bool(process.env.SEED_DEMO, false),
   },
 };
-
-export function smtpConfigured() {
-  return Boolean(config.smtp.host);
-}
 
 export function aiConfigured() {
   return Boolean(config.ai.baseUrl && config.ai.model);
