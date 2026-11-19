@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '@/api.js';
 import { useAuthStore } from '@/stores/auth.js';
 import { useMetaStore } from '@/stores/meta.js';
 import { useUiStore } from '@/stores/ui.js';
+import BaseModal from '@/components/BaseModal.vue';
 import { USER_COLORS, USER_EMOJIS } from '@/utils/constants.js';
 import PageHeader from '@/components/PageHeader.vue';
 import Avatar from '@/components/Avatar.vue';
@@ -19,6 +20,17 @@ const saving = ref(false);
 const savingPin = ref(false);
 const pinError = ref('');
 const profileError = ref('');
+const pushStatus = ref({ configured: false, publicKey: null, subscriptionCount: 0 });
+const pushSupported = ref(false);
+const pushPermission = ref('unsupported');
+const pushEnabledHere = ref(false);
+const pushBusy = ref(false);
+const pushTutorialOpen = ref(false);
+const secureContext = typeof window !== 'undefined' && window.isSecureContext;
+const isIosDevice =
+  typeof navigator !== 'undefined' &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const pushReady = computed(() => pushSupported.value && secureContext && pushStatus.value.configured);
 
 const form = reactive({
   name: '',
@@ -106,10 +118,105 @@ async function logout() {
   router.push({ name: 'login' });
 }
 
+function base64UrlToBytes(value) {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(window.atob(base64), (char) => char.charCodeAt(0));
+}
+
+async function loadPushStatus() {
+  pushSupported.value = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  pushPermission.value = pushSupported.value ? Notification.permission : 'unsupported';
+  try {
+    let subscription = null;
+    if (pushSupported.value) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      subscription = await registration?.pushManager.getSubscription();
+    }
+    const endpoint = subscription?.endpoint;
+    pushStatus.value = await api(endpoint ? `/api/push/status?endpoint=${encodeURIComponent(endpoint)}` : '/api/push/status');
+    pushEnabledHere.value = Boolean(endpoint && pushStatus.value.currentDevice);
+  } catch (err) {
+    ui.error(err.message);
+  }
+}
+
+async function enablePush() {
+  if (!pushReady.value || pushBusy.value) return;
+  pushBusy.value = true;
+  try {
+    const permission = pushPermission.value === 'granted' ? 'granted' : await Notification.requestPermission();
+    pushPermission.value = permission;
+    if (permission !== 'granted') {
+      ui.info('Consenti le notifiche nel browser per attivarle.');
+      return;
+    }
+    let registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) registration = await navigator.serviceWorker.register('/sw.js');
+    let subscription = await registration.pushManager.getSubscription();
+    const createdHere = !subscription;
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlToBytes(pushStatus.value.publicKey),
+      });
+    }
+    try {
+      const saved = await api('/api/push/subscriptions', { method: 'POST', body: subscription.toJSON() });
+      pushStatus.value.subscriptionCount = saved.subscriptionCount;
+    } catch (err) {
+      if (createdHere) await subscription.unsubscribe();
+      throw err;
+    }
+    pushEnabledHere.value = true;
+    ui.success('Notifiche push attivate su questo dispositivo.');
+  } catch (err) {
+    ui.error(err.message || 'Attivazione delle notifiche non riuscita.');
+  } finally {
+    pushBusy.value = false;
+  }
+}
+
+async function disablePush() {
+  if (pushBusy.value) return;
+  pushBusy.value = true;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    if (subscription) {
+      await api('/api/push/subscriptions', { method: 'DELETE', body: { endpoint: subscription.endpoint } });
+      await subscription.unsubscribe();
+      pushEnabledHere.value = false;
+      pushStatus.value.subscriptionCount = Math.max(0, pushStatus.value.subscriptionCount - 1);
+    }
+    ui.success('Notifiche push disattivate su questo dispositivo.');
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    pushBusy.value = false;
+  }
+}
+
+async function testPush() {
+  if (pushBusy.value) return;
+  pushBusy.value = true;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    if (!subscription) throw new Error('Non trovo una sottoscrizione attiva su questo dispositivo.');
+    await api('/api/push/test', { method: 'POST', body: { endpoint: subscription.endpoint } });
+    ui.success('Notifica di prova inviata.');
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    pushBusy.value = false;
+  }
+}
+
 onMounted(async () => {
   if (!auth.user) await auth.refresh();
   fill();
-  meta.load();
+  await Promise.all([meta.load(), loadPushStatus()]);
 });
 </script>
 
@@ -130,6 +237,36 @@ onMounted(async () => {
       <button type="button" class="btn btn-ghost btn-sm" @click="logout">
         <Icon name="logout" :size="15" /> Esci
       </button>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <div>
+          <p class="eyebrow">Promemoria personali</p>
+          <h2>Notifiche push</h2>
+          <p class="card-note">Ricevi avvisi su questo dispositivo anche quando Ghibiri Home non è aperta.</p>
+        </div>
+        <span class="pin-lock"><Icon name="bell" :size="18" /></span>
+      </header>
+      <div class="push-status">
+        <span v-if="pushEnabledHere" class="badge badge-sage"><Icon name="check" :size="11" /> Attive su questo dispositivo</span>
+        <span v-else-if="pushStatus.subscriptionCount" class="badge badge-blue">{{ pushStatus.subscriptionCount }} dispositivi attivi</span>
+        <span v-else class="badge badge-gold">Non attive</span>
+        <span v-if="pushPermission === 'denied'" class="hint">Il browser le ha bloccate: consenti le notifiche dalle impostazioni del sito.</span>
+        <span v-else-if="!pushSupported" class="hint">Questo browser non supporta le notifiche push web.</span>
+        <span v-else-if="!secureContext" class="hint">Le notifiche push richiedono una connessione HTTPS.</span>
+        <span v-else-if="!pushStatus.configured" class="hint">Il server deve essere configurato con le chiavi VAPID prima di poterle attivare.</span>
+      </div>
+      <div class="push-actions">
+        <button v-if="!pushEnabledHere" type="button" class="btn btn-primary" :disabled="!pushReady || pushBusy || pushPermission === 'denied'" @click="enablePush">
+          <span v-if="pushBusy" class="spinner" /> Attiva su questo dispositivo
+        </button>
+        <template v-else>
+          <button type="button" class="btn btn-soft" :disabled="pushBusy" @click="testPush">Invia una prova</button>
+          <button type="button" class="btn btn-ghost" :disabled="pushBusy" @click="disablePush">Disattiva</button>
+        </template>
+        <button type="button" class="btn btn-ghost" @click="pushTutorialOpen = true">Come attivare le notifiche push</button>
+      </div>
     </section>
 
     <section class="card">
@@ -210,6 +347,29 @@ onMounted(async () => {
         </button>
       </div>
     </section>
+
+    <BaseModal
+      v-model="pushTutorialOpen"
+      title="Come attivare le notifiche push"
+      subtitle="Le notifiche sono personali e vanno abilitate su ogni dispositivo."
+      size="md"
+    >
+      <ol class="push-tutorial">
+        <li><strong>Apri Ghibiri Home con una connessione sicura.</strong> Le push richiedono HTTPS (oppure localhost per prove locali).</li>
+        <li><strong>Premi “Attiva su questo dispositivo”</strong> e scegli “Consenti” nella richiesta del browser.</li>
+        <li v-if="isIosDevice">
+          <strong>Su iPhone o iPad:</strong> apri il sito in Safari, usa Condividi → Aggiungi alla schermata Home, avvia l’app dalla nuova icona e poi attiva le notifiche. Richiede iOS/iPadOS 16.4 o successivo.
+        </li>
+        <li v-else>
+          <strong>Se non compare la richiesta:</strong> controlla nelle impostazioni del browser che le notifiche per questo sito siano consentite.
+        </li>
+        <li>Puoi inviare una notifica di prova o disattivare questo dispositivo da questa scheda. Gli altri dispositivi restano indipendenti.</li>
+      </ol>
+      <p class="hint">Il server deve avere le chiavi VAPID configurate; se mancano, chiedi all’amministratore di completare la configurazione.</p>
+      <template #footer>
+        <button type="button" class="btn btn-primary" @click="pushTutorialOpen = false">Ho capito</button>
+      </template>
+    </BaseModal>
 
     <section class="card card-soft">
       <div class="app-info">
@@ -309,6 +469,34 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+}
+.push-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.push-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.push-tutorial {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-left: 22px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.push-tutorial strong {
+  color: var(--ink);
+}
+.push-tutorial + .hint {
+  display: block;
+  margin-top: 16px;
 }
 @media (max-width: 640px) {
   .form-foot .btn {

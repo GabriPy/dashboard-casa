@@ -76,6 +76,18 @@ async function main() {
     assert.equal(user.role, 'admin');
   });
 
+  await step('stato notifiche push autenticato', async () => {
+    const status = await call('/api/push/status');
+    assert.equal(status.status, 200);
+    assert.equal(typeof status.data.configured, 'boolean');
+    assert.equal(typeof status.data.subscriptionCount, 'number');
+    assert.equal(status.data.configured ? typeof status.data.publicKey : status.data.publicKey, status.data.configured ? 'string' : null);
+    if (!status.data.configured) {
+      const disabled = await call('/api/push/subscriptions', { method: 'POST', body: {} });
+      assert.equal(disabled.status, 503);
+    }
+  });
+
   await step('dashboard', async () => {
     const { status, data } = await call('/api/dashboard');
     assert.equal(status, 200);
@@ -451,6 +463,8 @@ async function main() {
     assert.equal(out.status, 200);
     const me = await call('/api/auth/me');
     assert.equal(me.status, 401);
+    const pushStatus = await call('/api/push/status');
+    assert.equal(pushStatus.status, 401);
   });
 
   const failed = results.filter((r) => !r.ok);

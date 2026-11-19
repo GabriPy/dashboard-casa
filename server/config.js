@@ -49,6 +49,11 @@ export const config = {
   maxUploadMb: int(process.env.MAX_UPLOAD_MB, 15),
   maxAttachmentsPerItem: int(process.env.MAX_ATTACHMENTS, 12),
   reminderHour: process.env.REMINDER_HOUR || '09:00',
+  push: {
+    vapidPublicKey: process.env.PUSH_VAPID_PUBLIC_KEY || '',
+    vapidPrivateKey: process.env.PUSH_VAPID_PRIVATE_KEY || '',
+    vapidSubject: process.env.PUSH_VAPID_SUBJECT || '',
+  },
   ai: {
     baseUrl: (process.env.AI_BASE_URL || '').replace(/\/+$/, ''),
     apiKey: process.env.AI_API_KEY || '',
@@ -86,6 +91,10 @@ export function smtpConfigured() {
 
 export function aiConfigured() {
   return Boolean(config.ai.baseUrl && config.ai.model);
+}
+
+export function pushConfigured() {
+  return Boolean(config.push.vapidPublicKey && config.push.vapidPrivateKey && config.push.vapidSubject);
 }
 
 fs.mkdirSync(config.uploadsDir, { recursive: true });

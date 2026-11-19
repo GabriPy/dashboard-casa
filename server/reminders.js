@@ -2,6 +2,7 @@ import { config, smtpConfigured } from './config.js';
 import { db, getSetting, nowIso } from './db.js';
 import { buildReminderContent, reminderRecipients, sendMail } from './mailer.js';
 import { addDays, expandRecurrence, isoToLocalDate, localDateTimeToIso, todayLocal } from './lib/time.js';
+import { pushConfigured, sendPushNotification } from './push.js';
 
 const RETRY_MINUTES = 15;
 const MAX_ATTEMPTS = 3;
@@ -28,12 +29,6 @@ function insertReminder({ entityType, entityId, sendAt, occurrenceAt = null }) {
   ).run(entityType, entityId, sendAt, occurrenceAt, nowIso());
 }
 
-function emailEnabled() {
-  // I promemoria vengono messi in coda anche senza SMTP: partiranno appena
-  // il server email sarà configurato (lo scheduler li salta finché manca).
-  return getSetting('reminder_email_enabled', 'true') === 'true';
-}
-
 export function reminderHour() {
   const raw = getSetting('reminder_hour', config.reminderHour) || '09:00';
   return /^\d{2}:\d{2}$/.test(raw) ? raw : '09:00';
@@ -49,7 +44,7 @@ function deadlineOffsets() {
 
 export function syncDeadlineReminders(deadline) {
   deletePendingAuto('deadline', deadline.id);
-  if (deadline.status !== 'open' || !emailEnabled()) return;
+  if (deadline.status !== 'open') return;
   const hour = reminderHour();
   for (const offset of deadlineOffsets()) {
     const date = addDays(deadline.due_date, -offset);
@@ -57,13 +52,13 @@ export function syncDeadlineReminders(deadline) {
       entityType: 'deadline',
       entityId: deadline.id,
       sendAt: localDateTimeToIso(date, hour),
+      occurrenceAt: date,
     });
   }
 }
 
 export function syncEventReminders(event) {
   deletePendingAuto('event', event.id);
-  if (!emailEnabled()) return;
   const hour = reminderHour();
   const offset = Math.max(0, Number.parseInt(getSetting('event_offset_days', '1'), 10) || 0);
   const today = todayLocal();
@@ -97,7 +92,7 @@ export function syncPlantTaskReminders(taskId) {
     .get(taskId);
   if (!task) return;
   deletePendingAuto('plant_task', task.id);
-  if (!emailEnabled() || getSetting('plant_reminders', 'true') !== 'true') return;
+  if (getSetting('plant_reminders', 'true') !== 'true') return;
   insertReminder({
     entityType: 'plant_task',
     entityId: task.id,
@@ -129,6 +124,12 @@ export function refreshRecurringEvents() {
   for (const row of rows) syncEventReminders(row);
 }
 
+export function syncAllReminders() {
+  for (const row of db.prepare("SELECT * FROM deadlines WHERE status = 'open'").all()) syncDeadlineReminders(row);
+  for (const row of db.prepare('SELECT * FROM events').all()) syncEventReminders(row);
+  for (const task of db.prepare('SELECT id FROM plant_tasks').all()) syncPlantTaskReminders(task.id);
+}
+
 function loadReminderEntity(type, id) {
   if (type === 'plant_task') {
     return db
@@ -143,6 +144,96 @@ function loadReminderEntity(type, id) {
   return null;
 }
 
+function pushPath(entityType) {
+  if (entityType === 'event') return '/calendario';
+  if (entityType === 'deadline') return '/scadenze';
+  return '/piante';
+}
+
+async function processDuePushReminders(now) {
+  if (!pushConfigured()) return { sent: 0, failed: 0 };
+  const cutoff = new Date(Date.now() - 48 * 3600_000).toISOString();
+  const reminders = db
+    .prepare(
+      `SELECT * FROM reminders
+       WHERE channel = 'email' AND status <> 'cancelled' AND send_at <= ? AND send_at >= ?
+       ORDER BY send_at ASC LIMIT 100`,
+    )
+    .all(now, cutoff);
+  const stats = { sent: 0, failed: 0 };
+  const saveDelivery = db.prepare(
+    `INSERT INTO push_deliveries (reminder_id, subscription_id, dedupe_key, status, created_at)
+     VALUES (?, ?, ?, 'pending', ?)
+     ON CONFLICT(subscription_id, dedupe_key) DO UPDATE SET reminder_id = excluded.reminder_id
+     WHERE push_deliveries.status = 'pending'`,
+  );
+  const subscriptionsForReminder = db.prepare(
+    `SELECT s.* FROM push_subscriptions s
+     JOIN users u ON u.id = s.user_id AND u.is_active = 1
+     WHERE (? = 1 OR u.id = ?)`,
+  );
+  const pendingDeliveries = db.prepare(
+    `SELECT d.reminder_id, d.subscription_id, d.attempts, s.user_id, s.endpoint, s.p256dh, s.auth
+     FROM push_deliveries d JOIN push_subscriptions s ON s.id = d.subscription_id
+     WHERE d.reminder_id = ? AND d.status = 'pending' AND d.attempts < ?`,
+  );
+  db.prepare('DELETE FROM push_deliveries WHERE reminder_id IS NULL AND created_at < ?').run(
+    new Date(Date.now() - 90 * 86400_000).toISOString(),
+  );
+
+  for (const reminder of reminders) {
+    const entity = loadReminderEntity(reminder.entity_type, reminder.entity_id);
+    if (!entity || (reminder.entity_type === 'deadline' && entity.status !== 'open')) continue;
+    const isPrivate = ['event', 'deadline'].includes(reminder.entity_type) && entity.visibility === 'private';
+    const targets = isPrivate
+      ? entity.created_by
+        ? subscriptionsForReminder.all(0, entity.created_by)
+        : []
+      : subscriptionsForReminder.all(1, null);
+    for (const subscription of targets) {
+      saveDelivery.run(
+        reminder.id,
+        subscription.id,
+        `${reminder.entity_type}:${reminder.entity_id}:${reminder.occurrence_at || reminder.send_at}`,
+        nowIso(),
+      );
+    }
+
+    const content = buildReminderContent(reminder.entity_type, entity, reminder);
+    const payload = {
+      title: content.subject,
+      body: content.text.split('\n').filter(Boolean).slice(1, 3).join(' · ').slice(0, 180),
+      url: pushPath(reminder.entity_type),
+    };
+    for (const delivery of pendingDeliveries.all(reminder.id, MAX_ATTEMPTS)) {
+      try {
+        await sendPushNotification(delivery, payload);
+        db.prepare(
+          "UPDATE push_deliveries SET status = 'sent', attempts = attempts + 1, sent_at = ?, last_error = NULL WHERE reminder_id = ? AND subscription_id = ?",
+        ).run(nowIso(), reminder.id, delivery.subscription_id);
+        stats.sent += 1;
+      } catch (err) {
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(delivery.subscription_id);
+          continue;
+        }
+        const attempts = delivery.attempts + 1;
+        const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'pending';
+        db.prepare('UPDATE push_deliveries SET status = ?, attempts = ?, last_error = ? WHERE reminder_id = ? AND subscription_id = ?').run(
+          status,
+          attempts,
+          String(err.message).slice(0, 500),
+          reminder.id,
+          delivery.subscription_id,
+        );
+        if (status === 'failed') stats.failed += 1;
+        console.warn(`[push] errore sul promemoria #${reminder.id}: ${err.message}`);
+      }
+    }
+  }
+  return stats;
+}
+
 let running = false;
 
 export async function processDueReminders({ force = false } = {}) {
@@ -154,6 +245,10 @@ export async function processDueReminders({ force = false } = {}) {
     db.prepare(
       "UPDATE reminders SET status = 'cancelled', last_error = 'promemoria troppo vecchio' WHERE status = 'pending' AND send_at < ?",
     ).run(new Date(Date.now() - 48 * 3600_000).toISOString());
+
+    const pushStats = await processDuePushReminders(now);
+    stats.pushSent = pushStats.sent;
+    stats.pushFailed = pushStats.failed;
 
     if (!smtpConfigured() && !force) return { ...stats, skipped: 'smtp_not_configured' };
     if (getSetting('reminder_email_enabled', 'true') !== 'true' && !force) return { ...stats, skipped: 'disabled' };
@@ -223,6 +318,11 @@ export async function processDueReminders({ force = false } = {}) {
 }
 
 export function startScheduler() {
+  try {
+    syncAllReminders();
+  } catch (err) {
+    console.error('[promemoria] sincronizzazione iniziale non riuscita:', err.message);
+  }
   const run = () => {
     processDueReminders().catch((err) => console.error('[promemoria] errore scheduler:', err));
   };

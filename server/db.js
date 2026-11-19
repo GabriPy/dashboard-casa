@@ -199,6 +199,31 @@ CREATE TABLE IF NOT EXISTS dashboard_preferences (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, endpoint)
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+
+CREATE TABLE IF NOT EXISTS push_deliveries (
+  reminder_id INTEGER REFERENCES reminders(id) ON DELETE SET NULL,
+  subscription_id INTEGER NOT NULL REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+  dedupe_key TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sent','failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  sent_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(subscription_id, dedupe_key)
+);
+CREATE INDEX IF NOT EXISTS idx_push_deliveries_pending ON push_deliveries(status, reminder_id);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -230,7 +255,7 @@ if (!recipeColumns.has('source')) {
 if (!recipeColumns.has('source_prompt')) {
   db.exec('ALTER TABLE recipes ADD COLUMN source_prompt TEXT');
 }
-db.pragma('user_version = 3');
+db.pragma('user_version = 4');
 
 export const nowIso = () => new Date().toISOString();
 

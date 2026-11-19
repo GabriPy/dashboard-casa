@@ -28,9 +28,8 @@ Privato, self-hosted e pensato per il telefono.
 
 **Ghibiri Home** è un servizio web self-hosted che raccoglie in un'unica app la vita pratica di una famiglia: cosa c'è da comprare, cosa scade, cosa c'è in calendario, cosa si cucina, quali piante vanno annaffiate.
 
-Nasce per **mamma.gabrielepili.it**, ma è un normale progetto Docker che puoi far girare dove vuoi. È pensato per stare su un piccolo server (una Radxa con 2 GB di RAM) dietro un Cloudflare Tunnel, senza servizi esterni obbligatori.
+E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un piccolo server (es. macchina con 2 GB di RAM) dietro un Cloudflare Tunnel, senza servizi esterni obbligatori.
 
-> [!TIP]
 > **Nessun account, nessuna password da ricordare.** Ogni membro della famiglia entra con un **PIN di 4 cifre**. La sicurezza arriva da HTTPS, blocco dopo 5 tentativi, sessioni `HttpOnly` e rate limiting.
 
 <table>
@@ -234,6 +233,18 @@ Verifica da **Impostazioni → Email e promemoria → Invia email di prova**.
 
 > [!NOTE]
 > Tutte le date sono intese in **Europe/Rome**. L'ora dei promemoria è configurabile (default `09:00`).
+
+### 🔔 Notifiche push
+
+Le notifiche push sono facoltative e indipendenti dall'email. Genera le chiavi VAPID:
+
+```powershell
+npx web-push generate-vapid-keys
+```
+
+Copia la chiave pubblica e quella privata nel `.env` (`PUSH_VAPID_PUBLIC_KEY` e `PUSH_VAPID_PRIVATE_KEY`) e imposta `PUSH_VAPID_SUBJECT` con un indirizzo `mailto:` o un URL. Non condividere né committare la chiave privata, poi riavvia con `docker compose up -d`.
+
+Ogni membro abilita le notifiche dalla sezione **Profilo** sul proprio dispositivo e può usare **Invia una prova**. Serve HTTPS; su iPhone/iPad (iOS/iPadOS 16.4+) occorre prima aggiungere il sito alla schermata Home e aprirlo da lì. L'attivazione è per dispositivo e il tutorial è disponibile nel profilo.
 
 ### 🤖 Ricette con l'AI
 

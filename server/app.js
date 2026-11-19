@@ -22,6 +22,7 @@ import { searchRouter } from './routes/search.js';
 import { settingsRouter } from './routes/settings.js';
 import { backupRouter } from './routes/backup.js';
 import { aiRouter } from './routes/ai.js';
+import { pushRouter } from './routes/push.js';
 
 export function createApp() {
   const app = express();
@@ -123,6 +124,7 @@ export function createApp() {
   app.use('/api/settings', settingsRouter);
   app.use('/api/backup', backupRouter);
   app.use('/api/ai', aiRouter);
+  app.use('/api/push', pushRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Endpoint non trovato.', code: 'not_found' });

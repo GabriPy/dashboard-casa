@@ -152,6 +152,20 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     }, 20000);
   }
 
+  it('apre il tutorial push come popup nel profilo', async () => {
+    await router.push('/profilo');
+    await settle(400);
+    const tutorial = [...document.querySelectorAll('button')].find((button) =>
+      button.textContent.includes('Come attivare le notifiche push'),
+    );
+    expect(tutorial).toBeTruthy();
+    tutorial.click();
+    await settle(250);
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(document.body.textContent).toContain('Se non compare la richiesta');
+    expect(document.body.textContent).toContain('Le notifiche sono personali e vanno abilitate su ogni dispositivo.');
+  });
+
   it('mostra l’anteprima di un evento e apre la modifica solo su richiesta', async () => {
     const { api } = await import('./api.js');
     const dashboard = await api('/api/dashboard');
