@@ -216,21 +216,36 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     }
   }, 20000);
 
-  it('apre la personalizzazione della dashboard', async () => {
+  it('gestisce la personalizzazione dalle impostazioni, non dalla home', async () => {
     await router.push('/');
     await settle(400);
     const customize = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Personalizza'));
-    expect(customize).toBeTruthy();
-    customize.click();
-    await settle(200);
-    expect(document.body.textContent).toContain('Personalizza la dashboard');
-    expect(document.body.textContent).toContain('Le modifiche valgono solo per il tuo profilo.');
-    expect(document.body.textContent).toContain('Riquadri riepilogativi');
+    expect(customize).toBeFalsy();
+
+    await router.push('/impostazioni');
+    await settle(500);
+    expect(document.body.textContent).toContain('Personalizzazione');
+    expect(document.body.textContent).toContain('Card della dashboard');
     expect(document.body.textContent).toContain('Sezioni della giornata');
-    const cancel = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla');
-    expect(cancel).toBeTruthy();
-    cancel.click();
-    await settle(100);
+    expect(document.body.textContent).toContain('Ordine dei collegamenti');
+    expect(document.body.textContent).toContain('I primi 4 sono nella barra in basso');
+    expect(document.body.textContent).toContain('Impostazioni, Profilo ed Esci restano fissi in fondo al menu Altro.');
+    expect(document.querySelectorAll('.sort-handle')).toHaveLength(15);
+    expect(document.querySelector('[aria-label="Sposta Spesa in alto"]')).toBeNull();
+
+    const { useAuthStore } = await import('./stores/auth.js');
+    const auth = useAuthStore();
+    const adminUser = auth.user;
+    try {
+      auth.user = { ...adminUser, id: 2, name: 'Mamma', role: 'member' };
+      await router.push('/');
+      await router.push('/impostazioni');
+      await settle(500);
+      expect([...document.querySelectorAll('.tabs .tab')].map((button) => button.textContent.trim())).toEqual(['Personalizzazione']);
+    } finally {
+      auth.user = adminUser;
+      await router.push('/');
+    }
   });
 
   it('renderizza il dettaglio di una ricetta', async () => {

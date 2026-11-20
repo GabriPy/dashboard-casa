@@ -3,15 +3,17 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '@/api.js';
 import { useAuthStore } from '@/stores/auth.js';
+import { useDashboardPreferencesStore } from '@/stores/dashboard-preferences.js';
 import { useUiStore } from '@/stores/ui.js';
+import { dashboardCardOptions } from '@/utils/dashboard-preferences.js';
 import { capitalize, formatDate, formatLongDate, formatTime, greeting, relativeDay, todayString } from '@/utils/format.js';
 import { PLANT_TYPES } from '@/utils/constants.js';
 import PageHeader from '@/components/PageHeader.vue';
 import Icon from '@/components/Icon.vue';
 import EmptyState from '@/components/EmptyState.vue';
-import BaseModal from '@/components/BaseModal.vue';
 
 const auth = useAuthStore();
+const personalization = useDashboardPreferencesStore();
 const ui = useUiStore();
 const router = useRouter();
 
@@ -23,32 +25,7 @@ const quickItem = ref('');
 const addingItem = ref(false);
 const quickInput = ref(null);
 
-const cardOptions = [
-  { id: 'shopping', label: 'Spesa', icon: 'basket', tone: 'primary', to: '/spesa' },
-  { id: 'deadlines', label: 'Scadenze', icon: 'clock', tone: 'gold', to: '/scadenze' },
-  { id: 'plants', label: 'Piante', icon: 'leaf', tone: '', to: '/piante' },
-  { id: 'recipes', label: 'Ricette', icon: 'book', tone: 'rose', to: '/ricette' },
-];
-
-const sectionOptions = [
-  { id: 'agenda', label: 'Agenda e prossimi giorni' },
-  { id: 'deadlines', label: 'Scadenze in arrivo' },
-  { id: 'shopping', label: 'Lista della spesa' },
-  { id: 'plants', label: 'Piante da curare' },
-  { id: 'recipe', label: 'Ricetta del giorno' },
-];
-
-function defaultDashboardPreferences() {
-  return {
-    cards: { order: cardOptions.map((item) => item.id), visible: cardOptions.map((item) => item.id) },
-    sections: { order: sectionOptions.map((item) => item.id), visible: sectionOptions.map((item) => item.id) },
-  };
-}
-
-const customizeOpen = ref(false);
-const savingPreferences = ref(false);
-const dashboardPreferences = ref(defaultDashboardPreferences());
-const preferenceDraft = ref(defaultDashboardPreferences());
+const dashboardPreferences = computed(() => personalization.preferences);
 
 const CAT_COLORS = {
   Casa: '#C0553A',
@@ -93,7 +70,7 @@ const visibleCards = computed(() => {
   return order
     .filter((id) => visible.includes(id))
     .map((id) => {
-      const option = cardOptions.find((item) => item.id === id);
+      const option = dashboardCardOptions.find((item) => item.id === id);
       const value = {
         shopping: data.value?.counts.shoppingPending,
         deadlines: data.value?.counts.deadlinesOpen,
@@ -121,14 +98,13 @@ function sectionOrder(id) {
 async function load() {
   loading.value = true;
   try {
-    const [dashboard, recipeData, preferenceData] = await Promise.all([
+    const [dashboard, recipeData] = await Promise.all([
       api('/api/dashboard'),
       api('/api/recipes').catch(() => ({ recipes: [] })),
-      api('/api/dashboard/preferences'),
+      personalization.load(),
     ]);
     data.value = dashboard;
     recipes.value = recipeData.recipes || [];
-    dashboardPreferences.value = preferenceData.preferences;
   } catch (err) {
     ui.error(err.message);
   } finally {
@@ -219,55 +195,6 @@ function openDay() {
   router.push({ path: '/calendario', query: { giorno: today.value } });
 }
 
-function openCustomize() {
-  preferenceDraft.value = {
-    cards: {
-      order: [...dashboardPreferences.value.cards.order],
-      visible: [...dashboardPreferences.value.cards.visible],
-    },
-    sections: {
-      order: [...dashboardPreferences.value.sections.order],
-      visible: [...dashboardPreferences.value.sections.visible],
-    },
-  };
-  customizeOpen.value = true;
-}
-
-function togglePreference(group, id) {
-  const visible = preferenceDraft.value[group].visible;
-  preferenceDraft.value[group].visible = visible.includes(id) ? visible.filter((item) => item !== id) : [...visible, id];
-}
-
-function movePreference(group, id, direction) {
-  const order = [...preferenceDraft.value[group].order];
-  const index = order.indexOf(id);
-  const target = index + direction;
-  if (target < 0 || target >= order.length) return;
-  [order[index], order[target]] = [order[target], order[index]];
-  preferenceDraft.value[group].order = order;
-}
-
-function resetPreferences() {
-  preferenceDraft.value = defaultDashboardPreferences();
-}
-
-async function savePreferences() {
-  savingPreferences.value = true;
-  try {
-    const result = await api('/api/dashboard/preferences', {
-      method: 'PUT',
-      body: preferenceDraft.value,
-    });
-    dashboardPreferences.value = result.preferences;
-    customizeOpen.value = false;
-    ui.success('La tua dashboard è stata aggiornata.');
-  } catch (err) {
-    ui.error(err.message);
-  } finally {
-    savingPreferences.value = false;
-  }
-}
-
 onMounted(load);
 </script>
 
@@ -279,9 +206,6 @@ onMounted(load);
       :subtitle="subtitle"
     >
       <template #actions>
-        <button type="button" class="btn btn-ghost" @click="openCustomize">
-          <Icon name="settings" :size="17" /> Personalizza
-        </button>
         <button type="button" class="btn btn-ghost" @click="router.push({ path: '/calendario', query: { nuovo: '1' } })">
           <Icon name="calendar" :size="17" /> Nuovo evento
         </button>
@@ -546,38 +470,6 @@ onMounted(load);
       </div>
     </template>
 
-    <BaseModal v-model="customizeOpen" title="Personalizza la dashboard" subtitle="Le modifiche valgono solo per il tuo profilo." size="lg">
-      <div class="dashboard-customize">
-        <section v-for="group in ['cards', 'sections']" :key="group" class="dashboard-pref-group">
-          <h3>{{ group === 'cards' ? 'Riquadri riepilogativi' : 'Sezioni della giornata' }}</h3>
-          <p class="muted">Scegli cosa mostrare e usa le frecce per cambiare l’ordine.</p>
-          <div class="dashboard-pref-list">
-            <div
-              v-for="(id, index) in preferenceDraft[group].order"
-              :key="id"
-              class="dashboard-pref-row"
-            >
-              <label class="dashboard-pref-label">
-                <input type="checkbox" :checked="preferenceDraft[group].visible.includes(id)" @change="togglePreference(group, id)" />
-                <span>{{ (group === 'cards' ? cardOptions : sectionOptions).find((item) => item.id === id)?.label }}</span>
-              </label>
-              <div class="row">
-                <button type="button" class="btn btn-ghost btn-sm" :disabled="index === 0" :aria-label="`Sposta ${id} in alto`" @click="movePreference(group, id, -1)">↑</button>
-                <button type="button" class="btn btn-ghost btn-sm" :disabled="index === preferenceDraft[group].order.length - 1" :aria-label="`Sposta ${id} in basso`" @click="movePreference(group, id, 1)">↓</button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-      <template #footer>
-        <button type="button" class="btn btn-ghost" @click="resetPreferences">Ripristina predefiniti</button>
-        <span class="spacer" />
-        <button type="button" class="btn btn-ghost" @click="customizeOpen = false">Annulla</button>
-        <button type="button" class="btn btn-primary" :disabled="savingPreferences" @click="savePreferences">
-          <span v-if="savingPreferences" class="spinner" /> Salva
-        </button>
-      </template>
-    </BaseModal>
   </div>
 </template>
 
@@ -851,43 +743,6 @@ onMounted(load);
 }
 .dashboard-sections > .page-stack {
   display: contents;
-}
-.dashboard-customize {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.dashboard-pref-group h3 {
-  margin-bottom: 4px;
-  font-size: 16px;
-}
-.dashboard-pref-group > p {
-  margin-bottom: 12px;
-  font-size: 12.5px;
-}
-.dashboard-pref-list {
-  border-top: 1px solid var(--line);
-}
-.dashboard-pref-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-.dashboard-pref-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  cursor: pointer;
-  font-size: 13.5px;
-}
-.dashboard-pref-label input {
-  width: 17px;
-  height: 17px;
-  accent-color: var(--primary);
 }
 @media (max-width: 720px) {
   .shopping-card {

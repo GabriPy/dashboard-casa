@@ -51,6 +51,8 @@ const paths = {
   droplet: '<path d="M12 3.2s6.2 6.1 6.2 11a6.2 6.2 0 0 1-12.4 0c0-4.9 6.2-11 6.2-11Z"/>',
   filter: '<path d="M3.4 5.2h17.2l-6.8 8v6.2l-3.6-1.8v-4.4l-6.8-8Z"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  grip:
+    '<circle cx="8" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="19" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="19" r="1" fill="currentColor" stroke="none"/>',
   refresh: '<path d="M20.6 12a8.6 8.6 0 1 1-2.6-6.2"/><path d="M20.8 3.4v5.2h-5.2"/>',
   shield: '<path d="M12 3.2 20 6v6.1c0 4.9-3.5 7.9-8 9-4.5-1.1-8-4.1-8-9V6l8-2.8Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
   database: '<ellipse cx="12" cy="6" rx="7.6" ry="3"/><path d="M4.4 6v12c0 1.7 3.4 3 7.6 3s7.6-1.3 7.6-3V6"/><path d="M4.4 12c0 1.7 3.4 3 7.6 3s7.6-1.3 7.6-3"/>',

@@ -1,9 +1,17 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { api, downloadFile } from '@/api.js';
 import { useAuthStore } from '@/stores/auth.js';
+import { useDashboardPreferencesStore } from '@/stores/dashboard-preferences.js';
 import { useMetaStore } from '@/stores/meta.js';
 import { useUiStore } from '@/stores/ui.js';
+import {
+  copyDashboardPreferences,
+  dashboardCardOptions,
+  dashboardSectionOptions,
+  defaultDashboardPreferences,
+  mobileNavOptions,
+} from '@/utils/dashboard-preferences.js';
 import { formatBytes, formatDate } from '@/utils/format.js';
 import { USER_COLORS, USER_EMOJIS } from '@/utils/constants.js';
 import PageHeader from '@/components/PageHeader.vue';
@@ -13,10 +21,12 @@ import Icon from '@/components/Icon.vue';
 
 const ui = useUiStore();
 const auth = useAuthStore();
+const personalization = useDashboardPreferencesStore();
 const meta = useMetaStore();
 
-const tab = ref('casa');
+const tab = ref('personalizzazione');
 const loading = ref(true);
+const preferencesLoaded = ref(false);
 const data = ref(null);
 const users = ref([]);
 const savingSettings = ref(false);
@@ -24,6 +34,10 @@ const testingAi = ref(false);
 const exporting = ref(false);
 const running = ref(false);
 const resyncing = ref(false);
+const savingPersonalization = ref(false);
+const preferenceDraft = ref(defaultDashboardPreferences());
+const draggingPreference = ref(null);
+const dropTarget = ref(null);
 
 const userModal = ref(false);
 const userEditing = ref(null);
@@ -63,13 +77,115 @@ const offsets = computed(() =>
 
 const pendingReminders = computed(() => data.value?.reminders || []);
 
-const tabs = [
+const adminTabs = [
   { id: 'casa', label: 'Casa', icon: 'home' },
   { id: 'famiglia', label: 'Famiglia', icon: 'users' },
   { id: 'promemoria', label: 'Promemoria', icon: 'clock' },
   { id: 'ai', label: 'Ricette AI', icon: 'sparkle' },
   { id: 'backup', label: 'Backup', icon: 'database' },
 ];
+const tabs = computed(() => [
+  { id: 'personalizzazione', label: 'Personalizzazione', icon: 'settings' },
+  ...(auth.isAdmin && data.value ? adminTabs : []),
+]);
+
+const preferenceGroups = [
+  { id: 'cards', title: 'Card della dashboard', options: dashboardCardOptions },
+  { id: 'sections', title: 'Sezioni della giornata', options: dashboardSectionOptions },
+];
+
+function reorderPreference(group, id, targetId, before) {
+  const order = [...preferenceDraft.value[group].order];
+  const sourceIndex = order.indexOf(id);
+  if (sourceIndex < 0 || id === targetId) return;
+  order.splice(sourceIndex, 1);
+  const targetIndex = order.indexOf(targetId);
+  if (targetIndex < 0) return;
+  order.splice(targetIndex + (before ? 0 : 1), 0, id);
+  preferenceDraft.value[group].order = order;
+}
+
+function startPreferenceDrag(event, group, id) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  draggingPreference.value = { group, id, pointerId: event.pointerId };
+  dropTarget.value = null;
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+}
+
+function updatePreferenceDropTarget(event) {
+  const dragging = draggingPreference.value;
+  if (!dragging || event.pointerId !== dragging.pointerId) return;
+  const element = document.elementFromPoint(event.clientX, event.clientY);
+  const row = element?.closest('[data-sort-group][data-sort-id]');
+  if (!row || row.dataset.sortGroup !== dragging.group || row.dataset.sortId === dragging.id) {
+    dropTarget.value = null;
+    return;
+  }
+  const bounds = row.getBoundingClientRect();
+  dropTarget.value = {
+    group: dragging.group,
+    id: row.dataset.sortId,
+    before: event.clientY < bounds.top + bounds.height / 2,
+  };
+}
+
+function finishPreferenceDrag(event) {
+  const dragging = draggingPreference.value;
+  if (!dragging || event.pointerId !== dragging.pointerId) return;
+  const target = dropTarget.value;
+  if (target?.group === dragging.group) {
+    reorderPreference(dragging.group, dragging.id, target.id, target.before);
+  }
+  draggingPreference.value = null;
+  dropTarget.value = null;
+}
+
+function cancelPreferenceDrag() {
+  draggingPreference.value = null;
+  dropTarget.value = null;
+}
+
+function sortPreferenceWithKeyboard(event, group, id) {
+  if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  const order = preferenceDraft.value[group].order;
+  const index = order.indexOf(id);
+  const targetId = order[index + (event.key === 'ArrowUp' ? -1 : 1)];
+  if (targetId) reorderPreference(group, id, targetId, event.key === 'ArrowUp');
+}
+
+function sortRowClasses(group, id) {
+  const dragging = draggingPreference.value;
+  const target = dropTarget.value;
+  return {
+    'is-dragging': dragging?.group === group && dragging.id === id,
+    'drop-before': target?.group === group && target.id === id && target.before,
+    'drop-after': target?.group === group && target.id === id && !target.before,
+  };
+}
+
+function togglePreference(group, id) {
+  const visible = preferenceDraft.value[group].visible;
+  preferenceDraft.value[group].visible = visible.includes(id) ? visible.filter((item) => item !== id) : [...visible, id];
+}
+
+function resetPersonalization() {
+  preferenceDraft.value = defaultDashboardPreferences();
+}
+
+async function savePersonalization() {
+  savingPersonalization.value = true;
+  try {
+    const saved = await personalization.save(preferenceDraft.value);
+    preferenceDraft.value = copyDashboardPreferences(saved);
+    ui.success('Personalizzazione salvata.');
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    savingPersonalization.value = false;
+  }
+}
 
 function formatInstant(iso) {
   if (!iso) return '—';
@@ -86,16 +202,21 @@ function toggleOffset(value) {
 async function load() {
   loading.value = true;
   try {
-    const [settingsData, usersData] = await Promise.all([api('/api/settings'), api('/api/users')]);
-    data.value = settingsData;
-    users.value = usersData.users;
-    Object.assign(settingsForm, {
-      household_name: settingsData.settings.household_name || 'Casa Ghibiri',
-      reminder_hour: settingsData.settings.reminder_hour || '09:00',
-      deadline_offsets: settingsData.settings.deadline_offsets || '7,1',
-      event_offset_days: Number(settingsData.settings.event_offset_days || 1),
-      plant_reminders: settingsData.settings.plant_reminders === 'true',
-    });
+    const savedPreferences = await personalization.load(true);
+    preferenceDraft.value = copyDashboardPreferences(savedPreferences);
+    preferencesLoaded.value = true;
+    if (auth.isAdmin) {
+      const [settingsData, usersData] = await Promise.all([api('/api/settings'), api('/api/users')]);
+      data.value = settingsData;
+      users.value = usersData.users;
+      Object.assign(settingsForm, {
+        household_name: settingsData.settings.household_name || 'Casa Ghibiri',
+        reminder_hour: settingsData.settings.reminder_hour || '09:00',
+        deadline_offsets: settingsData.settings.deadline_offsets || '7,1',
+        event_offset_days: Number(settingsData.settings.event_offset_days || 1),
+        plant_reminders: settingsData.settings.plant_reminders === 'true',
+      });
+    }
   } catch (err) {
     ui.error(err.message);
   } finally {
@@ -289,12 +410,27 @@ async function deleteUser() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  window.addEventListener('pointermove', updatePreferenceDropTarget);
+  window.addEventListener('pointerup', finishPreferenceDrag);
+  window.addEventListener('pointercancel', cancelPreferenceDrag);
+  load();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', updatePreferenceDropTarget);
+  window.removeEventListener('pointerup', finishPreferenceDrag);
+  window.removeEventListener('pointercancel', cancelPreferenceDrag);
+});
 </script>
 
 <template>
   <div class="page-stack settings-page">
-    <PageHeader eyebrow="Amministrazione" title="Impostazioni" subtitle="La casa, le persone, i promemoria e i backup." />
+    <PageHeader
+      :eyebrow="auth.isAdmin ? 'Amministrazione' : 'Preferenze personali'"
+      title="Impostazioni"
+      :subtitle="auth.isAdmin ? 'La casa, le persone, i promemoria e la tua esperienza.' : 'Personalizza la dashboard e la navigazione sul tuo dispositivo.'"
+    />
 
     <div class="tabs">
       <button v-for="t in tabs" :key="t.id" type="button" class="tab" :class="{ active: tab === t.id }" @click="tab = t.id">
@@ -304,7 +440,90 @@ onMounted(load);
 
     <div v-if="loading" class="loading-line"><span class="spinner" /> Carico le impostazioni…</div>
 
-    <template v-else-if="data">
+    <template v-else-if="preferencesLoaded">
+      <section v-if="tab === 'personalizzazione'" class="page-stack">
+        <div v-for="group in preferenceGroups" :key="group.id" class="card">
+          <header class="card-head">
+            <div>
+              <p class="eyebrow">Dashboard</p>
+              <h2>{{ group.title }}</h2>
+              <p class="card-note">Scegli cosa mostrare e trascina la maniglia per cambiarne l’ordine.</p>
+            </div>
+          </header>
+          <div class="dashboard-pref-list">
+            <div
+              v-for="id in preferenceDraft[group.id].order"
+              :key="id"
+              class="dashboard-pref-row"
+              :class="sortRowClasses(group.id, id)"
+              :data-sort-group="group.id"
+              :data-sort-id="id"
+            >
+              <label class="dashboard-pref-label">
+                <input
+                  type="checkbox"
+                  :checked="preferenceDraft[group.id].visible.includes(id)"
+                  @change="togglePreference(group.id, id)"
+                />
+                <span>{{ group.options.find((item) => item.id === id)?.label }}</span>
+              </label>
+              <button
+                type="button"
+                class="sort-handle"
+                :aria-label="`Riordina ${group.options.find((item) => item.id === id)?.label}`"
+                title="Trascina per riordinare; usa le frecce della tastiera"
+                @pointerdown="startPreferenceDrag($event, group.id, id)"
+                @keydown="sortPreferenceWithKeyboard($event, group.id, id)"
+              ><Icon name="grip" :size="18" /></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <header class="card-head">
+            <div>
+              <p class="eyebrow">Navigazione mobile</p>
+              <h2>Ordine dei collegamenti</h2>
+              <p class="card-note">Trascina la maniglia per riordinare. I primi 4 sono nella barra in basso; gli altri in Altro.</p>
+            </div>
+          </header>
+          <div class="dashboard-pref-list">
+            <div
+              v-for="(id, index) in preferenceDraft.mobileNav.order"
+              :key="id"
+              class="dashboard-pref-row"
+              :class="sortRowClasses('mobileNav', id)"
+              data-sort-group="mobileNav"
+              :data-sort-id="id"
+            >
+              <div class="dashboard-pref-label">
+                <Icon :name="mobileNavOptions.find((item) => item.id === id)?.icon" :size="17" />
+                <span>{{ mobileNavOptions.find((item) => item.id === id)?.label }}</span>
+                <span class="badge" :class="index < 4 ? 'badge-sage' : 'badge-blue'">
+                  {{ index < 4 ? 'In basso' : 'In Altro' }}
+                </span>
+              </div>
+              <button
+                type="button"
+                class="sort-handle"
+                :aria-label="`Riordina ${mobileNavOptions.find((item) => item.id === id)?.label}`"
+                title="Trascina per riordinare; usa le frecce della tastiera"
+                @pointerdown="startPreferenceDrag($event, 'mobileNav', id)"
+                @keydown="sortPreferenceWithKeyboard($event, 'mobileNav', id)"
+              ><Icon name="grip" :size="18" /></button>
+            </div>
+          </div>
+          <p class="hint" style="margin-top: 12px">Impostazioni, Profilo ed Esci restano fissi in fondo al menu Altro.</p>
+        </div>
+
+        <div class="settings-foot">
+          <button type="button" class="btn btn-ghost" @click="resetPersonalization">Ripristina predefiniti</button>
+          <button type="button" class="btn btn-primary" :disabled="savingPersonalization" @click="savePersonalization">
+            <span v-if="savingPersonalization" class="spinner" /> Salva personalizzazione
+          </button>
+        </div>
+      </section>
+
       <section v-if="tab === 'casa'" class="page-stack">
         <div class="card">
           <header class="card-head">
@@ -684,6 +903,62 @@ code {
   padding-top: 16px;
   border-top: 1px solid var(--line);
   flex-wrap: wrap;
+}
+.dashboard-pref-list {
+  border-top: 1px solid var(--line);
+  user-select: none;
+}
+.dashboard-pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dashboard-pref-row.is-dragging {
+  opacity: 0.45;
+  background: var(--surface-2);
+}
+.dashboard-pref-row.drop-before {
+  box-shadow: inset 0 2px var(--primary);
+}
+.dashboard-pref-row.drop-after {
+  box-shadow: inset 0 -2px var(--primary);
+}
+.dashboard-pref-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.dashboard-pref-label input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+}
+.sort-handle {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+}
+.sort-handle:hover,
+.sort-handle:focus-visible {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.sort-handle:active {
+  cursor: grabbing;
 }
 .user-list {
   display: flex;

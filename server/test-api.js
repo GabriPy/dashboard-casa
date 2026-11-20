@@ -126,6 +126,7 @@ async function main() {
         order: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
         visible: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
       },
+      mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'recipes', 'plants'] },
     };
     const initial = await call('/api/dashboard/preferences');
     assert.deepEqual(initial.data.preferences, defaults);
@@ -133,6 +134,7 @@ async function main() {
     const adminPreferences = {
       cards: { order: ['recipes', 'plants', 'deadlines', 'shopping'], visible: ['recipes', 'plants'] },
       sections: { order: ['recipe', 'plants', 'shopping', 'deadlines', 'agenda'], visible: ['recipe', 'plants', 'agenda'] },
+      mobileNav: { order: ['recipes', 'plants', 'deadlines', 'shopping', 'calendar', 'today'] },
     };
     const savedAdmin = await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
     assert.equal(savedAdmin.status, 200);
@@ -142,6 +144,16 @@ async function main() {
       body: { ...adminPreferences, cards: { ...adminPreferences.cards, order: ['recipes', 'recipes', 'deadlines', 'shopping'] } },
     });
     assert.equal(invalid.status, 400);
+    const invalidNavigation = await call('/api/dashboard/preferences', {
+      method: 'PUT',
+      body: { ...adminPreferences, mobileNav: { order: ['today', 'today', 'calendar', 'deadlines', 'recipes', 'plants'] } },
+    });
+    assert.equal(invalidNavigation.status, 400);
+    const legacySave = await call('/api/dashboard/preferences', {
+      method: 'PUT',
+      body: { cards: adminPreferences.cards, sections: adminPreferences.sections },
+    });
+    assert.deepEqual(legacySave.data.preferences.mobileNav, adminPreferences.mobileNav);
 
     await login(2, MAMMA_PIN);
     const memberInitial = await call('/api/dashboard/preferences');
@@ -149,6 +161,7 @@ async function main() {
     const memberPreferences = {
       cards: { order: ['deadlines', 'shopping', 'plants', 'recipes'], visible: ['deadlines', 'shopping', 'plants', 'recipes'] },
       sections: defaults.sections,
+      mobileNav: { order: ['shopping', 'today', 'calendar', 'deadlines', 'plants', 'recipes'] },
     };
     const savedMember = await call('/api/dashboard/preferences', { method: 'PUT', body: memberPreferences });
     assert.deepEqual(savedMember.data.preferences, memberPreferences);

@@ -46,6 +46,8 @@ Formato errore:
 | Metodo | Percorso | Note |
 | --- | --- | --- |
 | GET | `/api/dashboard?date=YYYY-MM-DD` | Eventi di oggi e della settimana, scadenze aperte, spesa, piante, conteggi. |
+| GET | `/api/dashboard/preferences` | Preferenze personali per card, sezioni e navigazione mobile. |
+| PUT | `/api/dashboard/preferences` | Aggiorna le preferenze personali; i primi 4 collegamenti mobili compaiono nella barra in basso, gli altri in **Altro**. |
 | GET | `/api/search?q=testo` | Ricerca trasversale (min. 2 caratteri), rispetta la privacy. |
 
 ## Eventi

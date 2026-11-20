@@ -105,7 +105,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 
         <ul class="art-list">
           <li><span class="art-ico"><Icon name="calendar" :size="17" /></span> Cosa c’è da fare oggi, a colpo d’occhio</li>
-          <li><span class="art-ico"><Icon name="bell" :size="17" /></span> Promemoria gentili via email, prima che sia tardi</li>
+          <li><span class="art-ico"><Icon name="bell" :size="17" /></span> Promemoria push per le cose di casa, prima che sia tardi</li>
           <li><span class="art-ico"><Icon name="leaf" :size="17" /></span> Le piante di casa, con la loro piccola agenda</li>
         </ul>
       </div>

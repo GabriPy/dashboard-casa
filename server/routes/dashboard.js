@@ -12,6 +12,7 @@ dashboardRouter.use(requireAuth);
 
 const CARD_IDS = ['shopping', 'deadlines', 'plants', 'recipes'];
 const SECTION_IDS = ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'];
+const MOBILE_NAV_IDS = ['today', 'shopping', 'calendar', 'deadlines', 'recipes', 'plants'];
 const uniqueList = (values) => new Set(values).size === values.length;
 const dashboardPreferencesSchema = z
   .object({
@@ -23,13 +24,26 @@ const dashboardPreferencesSchema = z
       order: z.array(z.enum(SECTION_IDS)).length(SECTION_IDS.length).refine(uniqueList),
       visible: z.array(z.enum(SECTION_IDS)).refine(uniqueList),
     }),
+    mobileNav: z
+      .object({
+        order: z.array(z.enum(MOBILE_NAV_IDS)).length(MOBILE_NAV_IDS.length).refine(uniqueList),
+      })
+      .optional(),
   })
   .strict();
 
 export const DEFAULT_DASHBOARD_PREFERENCES = {
   cards: { order: [...CARD_IDS], visible: [...CARD_IDS] },
   sections: { order: [...SECTION_IDS], visible: [...SECTION_IDS] },
+  mobileNav: { order: [...MOBILE_NAV_IDS] },
 };
+
+function normalizeDashboardPreferences(preferences, fallback = DEFAULT_DASHBOARD_PREFERENCES) {
+  return {
+    ...preferences,
+    mobileNav: preferences.mobileNav || fallback.mobileNav,
+  };
+}
 
 dashboardRouter.get('/preferences', (req, res) => {
   const row = db.prepare('SELECT preferences FROM dashboard_preferences WHERE user_id = ?').get(req.user.id);
@@ -38,7 +52,9 @@ dashboardRouter.get('/preferences', (req, res) => {
     return;
   }
   try {
-    const preferences = dashboardPreferencesSchema.parse(JSON.parse(row.preferences));
+    const preferences = normalizeDashboardPreferences(
+      dashboardPreferencesSchema.parse(JSON.parse(row.preferences)),
+    );
     res.json({ preferences });
   } catch (err) {
     console.error(`[dashboard] preferenze non valide per il profilo ${req.user.id}:`, err.message);
@@ -47,7 +63,17 @@ dashboardRouter.get('/preferences', (req, res) => {
 });
 
 dashboardRouter.put('/preferences', (req, res) => {
-  const preferences = validate(dashboardPreferencesSchema, req.body);
+  const parsedPreferences = validate(dashboardPreferencesSchema, req.body);
+  const currentRow = db.prepare('SELECT preferences FROM dashboard_preferences WHERE user_id = ?').get(req.user.id);
+  let currentPreferences = DEFAULT_DASHBOARD_PREFERENCES;
+  if (currentRow) {
+    try {
+      currentPreferences = normalizeDashboardPreferences(dashboardPreferencesSchema.parse(JSON.parse(currentRow.preferences)));
+    } catch (err) {
+      console.error(`[dashboard] preferenze non valide per il profilo ${req.user.id}:`, err.message);
+    }
+  }
+  const preferences = normalizeDashboardPreferences(parsedPreferences, currentPreferences);
   db.prepare(
     `INSERT INTO dashboard_preferences (user_id, preferences, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET preferences = excluded.preferences, updated_at = excluded.updated_at`,

@@ -3,7 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
 import { useMetaStore } from '@/stores/meta.js';
+import { useDashboardPreferencesStore } from '@/stores/dashboard-preferences.js';
 import { useUiStore } from '@/stores/ui.js';
+import { mobileNavOptions } from '@/utils/dashboard-preferences.js';
 import BrandMark from './BrandMark.vue';
 import Avatar from './Avatar.vue';
 import Icon from './Icon.vue';
@@ -12,6 +14,7 @@ import RecipeGenerator from './RecipeGenerator.vue';
 
 const auth = useAuthStore();
 const meta = useMetaStore();
+const dashboardPreferences = useDashboardPreferencesStore();
 const ui = useUiStore();
 const route = useRoute();
 const router = useRouter();
@@ -19,21 +22,17 @@ const router = useRouter();
 const quickAddOpen = ref(false);
 const moreOpen = ref(false);
 
-const nav = [
-  { label: 'Oggi', icon: 'home', to: '/' },
-  { label: 'Spesa', icon: 'basket', to: '/spesa' },
-  { label: 'Calendario', icon: 'calendar', to: '/calendario' },
-  { label: 'Scadenze', icon: 'clock', to: '/scadenze' },
-  { label: 'Ricette', icon: 'book', to: '/ricette' },
-  { label: 'Piante', icon: 'leaf', to: '/piante' },
-];
-
-const bottomNav = [
-  { label: 'Oggi', icon: 'home', to: '/' },
-  { label: 'Spesa', icon: 'basket', to: '/spesa' },
-  { label: 'Calendario', icon: 'calendar', to: '/calendario' },
-  { label: 'Scadenze', icon: 'clock', to: '/scadenze' },
-];
+const nav = mobileNavOptions.map(({ label, icon, to }) => ({ label, icon, to }));
+const bottomNav = computed(() =>
+  dashboardPreferences.preferences.mobileNav.order
+    .slice(0, 4)
+    .map((id) => mobileNavOptions.find((item) => item.id === id)),
+);
+const moreNav = computed(() =>
+  dashboardPreferences.preferences.mobileNav.order
+    .slice(4)
+    .map((id) => mobileNavOptions.find((item) => item.id === id)),
+);
 
 const quickItems = [
   { label: 'Evento', hint: 'Appuntamento in calendario', icon: 'calendar', to: '/calendario', emoji: '📅' },
@@ -43,7 +42,11 @@ const quickItems = [
   { label: 'Pianta', hint: 'Una nuova pianta di casa', icon: 'leaf', to: '/piante', emoji: '🪴' },
 ];
 
-const isMoreActive = computed(() => ['/ricette', '/piante', '/profilo', '/impostazioni'].some((p) => route.path.startsWith(p)));
+const isMoreActive = computed(() =>
+  [...moreNav.value.map((item) => item.to), '/profilo', '/impostazioni'].some((path) =>
+    path === '/' ? route.path === '/' : route.path.startsWith(path),
+  ),
+);
 
 function isActive(to) {
   if (to === '/') return route.path === '/';
@@ -85,6 +88,7 @@ function onShortcut(event) {
 
 onMounted(() => {
   meta.load();
+  dashboardPreferences.load().catch((err) => ui.error(err.message));
   document.addEventListener('keydown', onShortcut);
 });
 onBeforeUnmount(() => {
@@ -121,7 +125,6 @@ onBeforeUnmount(() => {
         <div class="nav-divider" />
 
         <RouterLink
-          v-if="auth.isAdmin"
           to="/impostazioni"
           class="nav-link"
           :class="{ active: route.path.startsWith('/impostazioni') }"
@@ -245,19 +248,14 @@ onBeforeUnmount(() => {
               </button>
             </header>
             <div class="more-list">
-              <button type="button" class="more-row" @click="go('/ricette')">
-                <span class="more-icon rose"><Icon name="book" :size="19" /></span>
-                <span><strong>Ricette</strong><small>Il ricettario di casa</small></span>
+              <button v-for="item in moreNav" :key="item.id" type="button" class="more-row" @click="go(item.to)">
+                <span class="more-icon" :class="item.tone"><Icon :name="item.icon" :size="19" /></span>
+                <span><strong>{{ item.label }}</strong><small>{{ item.hint }}</small></span>
                 <Icon name="chevron-right" :size="17" />
               </button>
-              <button type="button" class="more-row" @click="go('/piante')">
-                <span class="more-icon sage"><Icon name="leaf" :size="19" /></span>
-                <span><strong>Piante</strong><small>Cura e diario verde</small></span>
-                <Icon name="chevron-right" :size="17" />
-              </button>
-              <button v-if="auth.isAdmin" type="button" class="more-row" @click="go('/impostazioni')">
+              <button type="button" class="more-row" @click="go('/impostazioni')">
                 <span class="more-icon gold"><Icon name="settings" :size="19" /></span>
-                <span><strong>Impostazioni</strong><small>Famiglia, email, backup</small></span>
+                <span><strong>Impostazioni</strong><small>Casa e personalizzazione</small></span>
                 <Icon name="chevron-right" :size="17" />
               </button>
               <button type="button" class="more-row" @click="go('/profilo')">
