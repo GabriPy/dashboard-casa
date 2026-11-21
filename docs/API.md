@@ -58,9 +58,11 @@ Gli endpoint richiedono sessione. Le azioni accedono a Home Assistant solo trami
 | --- | --- | --- | --- |
 | GET | `/api/home-assistant/status` | autenticato | Indica se URL e token sono configurati sul server. |
 | GET | `/api/home-assistant/devices` | autenticato | Stati correnti e entità disponibili in Home Assistant. |
-| POST | `/api/home-assistant/devices` | amministratore | Aggiunge un mapping `{ name, entityId, room, icon }`. |
+| POST | `/api/home-assistant/devices` | amministratore | Aggiunge un mapping `{ name, entityId, room, groupName?, icon }`. Dispositivi con la stessa stanza e lo stesso gruppo vengono controllati insieme. |
+| PATCH | `/api/home-assistant/devices/:id` | amministratore | Modifica nome, stanza, gruppo e icona. |
 | DELETE | `/api/home-assistant/devices/:id` | amministratore | Rimuove il dispositivo da Ghibiri Home. |
 | POST | `/api/home-assistant/devices/:id/action` | autenticato | Body `{ turnOn }`; chiama `turn_on` o `turn_off` nel dominio dell’entità. |
+| POST | `/api/home-assistant/groups/action` | autenticato | Body `{ room, groupName, turnOn }`; invia il comando a tutti i dispositivi disponibili del gruppo, anche tra domini diversi. |
 
 ## Eventi
 

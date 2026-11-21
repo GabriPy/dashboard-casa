@@ -6,6 +6,7 @@ import { useUiStore } from '@/stores/ui.js';
 import PageHeader from '@/components/PageHeader.vue';
 import BaseModal from '@/components/BaseModal.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import HomeAssistantDeviceCard from '@/components/HomeAssistantDeviceCard.vue';
 import Icon from '@/components/Icon.vue';
 
 const auth = useAuthStore();
@@ -18,6 +19,9 @@ const busyId = ref(null);
 const modalOpen = ref(false);
 const saving = ref(false);
 const formError = ref('');
+const editingDevice = ref(null);
+const busyGroup = ref('');
+const expandedGroups = ref(new Set());
 
 const iconOptions = [
   { id: 'power', label: 'Generico', icon: 'power' },
@@ -33,29 +37,71 @@ const form = reactive({
   name: '',
   entityId: '',
   room: '',
+  groupName: '',
   icon: 'power',
 });
 
 const groupedDevices = computed(() => {
-  const groups = new Map();
+  const rooms = new Map();
   for (const device of devices.value) {
-    const room = device.room || 'Casa';
-    if (!groups.has(room)) groups.set(room, []);
-    groups.get(room).push(device);
+    const roomName = device.room || 'Casa';
+    if (!rooms.has(roomName)) rooms.set(roomName, { name: roomName, devices: [], groups: new Map() });
+    const room = rooms.get(roomName);
+    if (!device.groupName) {
+      room.devices.push(device);
+      continue;
+    }
+    if (!room.groups.has(device.groupName)) room.groups.set(device.groupName, []);
+    room.groups.get(device.groupName).push(device);
   }
-  return [...groups.entries()].map(([name, items]) => ({ name, items }));
+  return [...rooms.values()].map((room) => ({
+    name: room.name,
+    devices: room.devices,
+    groups: [...room.groups.entries()].map(([name, items]) => ({
+      name,
+      items,
+      key: JSON.stringify([room.name, name]),
+      onCount: items.filter((device) => device.on).length,
+      availableCount: items.filter((device) => device.available).length,
+    })),
+  }));
 });
 
 const onCount = computed(() => devices.value.filter((device) => device.on).length);
 
 function resetForm() {
-  Object.assign(form, { name: '', entityId: '', room: '', icon: 'power' });
+  editingDevice.value = null;
+  Object.assign(form, { name: '', entityId: '', room: '', groupName: '', icon: 'power' });
   formError.value = '';
 }
 
 function openNew() {
   resetForm();
   modalOpen.value = true;
+}
+
+function openEdit(device) {
+  editingDevice.value = device;
+  Object.assign(form, {
+    name: device.name,
+    entityId: device.entityId,
+    room: device.room,
+    groupName: device.groupName,
+    icon: device.icon,
+  });
+  formError.value = '';
+  modalOpen.value = true;
+}
+
+function isGroupExpanded(key) {
+  return expandedGroups.value.has(key);
+}
+
+function toggleGroupExpanded(key) {
+  const updated = new Set(expandedGroups.value);
+  if (updated.has(key)) updated.delete(key);
+  else updated.add(key);
+  expandedGroups.value = updated;
 }
 
 function selectEntity(entity) {
@@ -106,22 +152,49 @@ async function saveDevice() {
   saving.value = true;
   formError.value = '';
   try {
-    await api('/api/home-assistant/devices', {
-      method: 'POST',
-      body: {
-        name: form.name.trim(),
-        entityId: form.entityId.trim(),
-        room: form.room.trim() || null,
-        icon: form.icon,
-      },
-    });
+    const body = {
+      name: form.name.trim(),
+      room: form.room.trim() || null,
+      groupName: form.groupName.trim() || null,
+      icon: form.icon,
+    };
+    if (editingDevice.value) {
+      await api(`/api/home-assistant/devices/${editingDevice.value.id}`, { method: 'PATCH', body });
+    } else {
+      await api('/api/home-assistant/devices', {
+        method: 'POST',
+        body: { ...body, entityId: form.entityId.trim() },
+      });
+    }
     modalOpen.value = false;
-    ui.success('Dispositivo aggiunto.');
+    ui.success(editingDevice.value ? 'Dispositivo aggiornato.' : 'Dispositivo aggiunto.');
+    editingDevice.value = null;
     await load();
   } catch (err) {
     formError.value = err.message;
   } finally {
     saving.value = false;
+  }
+}
+
+async function toggleGroup(group, room) {
+  if (!group.availableCount || busyGroup.value) return;
+  busyGroup.value = group.key;
+  try {
+    const result = await api('/api/home-assistant/groups/action', {
+      method: 'POST',
+      body: {
+        room,
+        groupName: group.name,
+        turnOn: group.onCount === 0,
+      },
+    });
+    const updatedById = new Map(result.devices.map((device) => [device.id, device]));
+    devices.value = devices.value.map((device) => updatedById.get(device.id) || device);
+  } catch (err) {
+    ui.error(err.message);
+  } finally {
+    busyGroup.value = '';
   }
 }
 
@@ -136,14 +209,11 @@ async function removeDevice(device) {
   try {
     await api(`/api/home-assistant/devices/${device.id}`, { method: 'DELETE' });
     devices.value = devices.value.filter((item) => item.id !== device.id);
+    if (editingDevice.value?.id === device.id) modalOpen.value = false;
     ui.success('Dispositivo rimosso.');
   } catch (err) {
     ui.error(err.message);
   }
-}
-
-function iconFor(device) {
-  return iconOptions.find((item) => item.id === device.icon)?.icon || 'power';
 }
 
 onMounted(load);
@@ -190,59 +260,82 @@ onMounted(load);
     </EmptyState>
 
     <div v-else class="domotica-groups">
-      <section v-for="group in groupedDevices" :key="group.name" class="domotica-group">
+      <section v-for="room in groupedDevices" :key="room.name" class="domotica-group">
         <header class="domotica-group-head">
           <p class="eyebrow">Stanza</p>
-          <h2>{{ group.name }}</h2>
+          <h2>{{ room.name }}</h2>
         </header>
-        <div class="domotica-grid">
-          <article
-            v-for="device in group.items"
-            :key="device.id"
-            class="device-card"
-            :class="{ on: device.on, unavailable: !device.available }"
-          >
-            <div class="device-card-top">
-              <span class="device-icon"><Icon :name="iconFor(device)" :size="21" /></span>
+        <div v-if="room.groups.length" class="domotica-named-groups">
+          <article v-for="group in room.groups" :key="group.key" class="device-group">
+            <header class="device-group-head">
               <button
-                v-if="auth.isAdmin"
                 type="button"
-                class="icon-btn device-remove"
-                :aria-label="`Rimuovi ${device.name}`"
-                title="Rimuovi"
-                @click="removeDevice(device)"
+                class="device-group-expand"
+                :aria-expanded="isGroupExpanded(group.key)"
+                :aria-label="`${isGroupExpanded(group.key) ? 'Comprimi' : 'Espandi'} gruppo ${group.name}`"
+                @click="toggleGroupExpanded(group.key)"
               >
-                <Icon name="trash" :size="15" />
+                <Icon :name="isGroupExpanded(group.key) ? 'chevron-down' : 'chevron-right'" :size="18" />
+                <span class="device-group-icon"><Icon name="group" :size="19" /></span>
+                <span class="device-group-title">
+                  <strong>{{ group.name }}</strong>
+                  <small>
+                    {{ group.availableCount ? `${group.onCount} accesi · ${group.items.length} dispositivi` : 'Nessun dispositivo disponibile' }}
+                  </small>
+                </span>
               </button>
+              <button
+                type="button"
+                class="device-group-action"
+                :class="{ on: group.onCount > 0 }"
+                :disabled="!group.availableCount || busyGroup === group.key"
+                :aria-label="`${group.onCount ? 'Spegni' : 'Accendi'} gruppo ${group.name}`"
+                @click="toggleGroup(group, room.name)"
+              >
+                <span v-if="busyGroup === group.key" class="spinner" />
+                <template v-else>
+                  <Icon name="power" :size="17" />
+                  <span>{{ group.onCount ? 'Spegni' : 'Accendi' }}</span>
+                </template>
+              </button>
+            </header>
+            <div v-if="isGroupExpanded(group.key)" class="domotica-grid device-group-devices">
+              <HomeAssistantDeviceCard
+                v-for="device in group.items"
+                :key="device.id"
+                :device="device"
+                :editable="auth.isAdmin"
+                :busy="busyId === device.id"
+                @toggle="toggleDevice(device)"
+                @edit="openEdit(device)"
+                @remove="removeDevice(device)"
+              />
             </div>
-            <div class="device-copy">
-              <strong>{{ device.name }}</strong>
-              <span v-if="!device.available" class="device-status muted">Non disponibile</span>
-              <span v-else class="device-status" :class="{ active: device.on }">
-                {{ device.on ? 'Acceso' : 'Spento' }}
-              </span>
-            </div>
-            <button
-              type="button"
-              class="device-switch"
-              :class="{ on: device.on }"
-              role="switch"
-              :aria-checked="device.on"
-              :disabled="!device.available || busyId === device.id"
-              :aria-label="`${device.on ? 'Spegni' : 'Accendi'} ${device.name}`"
-              @click="toggleDevice(device)"
-            >
-              <span v-if="busyId === device.id" class="spinner" />
-              <Icon v-else :name="device.on ? 'power' : 'power'" :size="18" />
-            </button>
           </article>
+        </div>
+        <div v-if="room.devices.length" class="domotica-grid">
+          <HomeAssistantDeviceCard
+            v-for="device in room.devices"
+            :key="device.id"
+            :device="device"
+            :editable="auth.isAdmin"
+            :busy="busyId === device.id"
+            @toggle="toggleDevice(device)"
+            @edit="openEdit(device)"
+            @remove="removeDevice(device)"
+          />
         </div>
       </section>
     </div>
 
-    <BaseModal v-model="modalOpen" title="Aggiungi dispositivo" subtitle="Scegli un’entità di Home Assistant da controllare." size="lg">
+    <BaseModal
+      v-model="modalOpen"
+      :title="editingDevice ? 'Modifica dispositivo' : 'Aggiungi dispositivo'"
+      :subtitle="editingDevice ? 'Scegli stanza e gruppo per organizzare i controlli.' : 'Scegli un’entità di Home Assistant da controllare.'"
+      size="lg"
+    >
       <div class="stack">
-        <div v-if="availableEntities.length" class="ha-entity-picker">
+        <div v-if="availableEntities.length && !editingDevice" class="ha-entity-picker">
           <label>Entità disponibili</label>
           <div class="ha-entity-list">
             <button
@@ -271,9 +364,14 @@ onMounted(load);
             <label for="ha-room">Stanza</label>
             <input id="ha-room" v-model="form.room" class="input" maxlength="60" placeholder="es. Soggiorno" />
           </div>
+          <div class="field">
+            <label for="ha-group">Gruppo (facoltativo)</label>
+            <input id="ha-group" v-model="form.groupName" class="input" maxlength="60" placeholder="es. Tavolo" />
+            <span class="hint">I dispositivi con lo stesso gruppo e stanza si comandano insieme.</span>
+          </div>
         </div>
 
-        <div class="field">
+        <div v-if="!editingDevice" class="field">
           <label for="ha-entity">Entity ID</label>
           <input id="ha-entity" v-model="form.entityId" class="input" maxlength="180" placeholder="light.lampada_soggiorno" />
           <span class="hint">Puoi copiarlo da Home Assistant o selezionarlo dalla lista sopra.</span>
@@ -301,7 +399,7 @@ onMounted(load);
       <template #footer>
         <button type="button" class="btn btn-ghost" @click="modalOpen = false">Annulla</button>
         <button type="button" class="btn btn-primary" :disabled="saving" @click="saveDevice">
-          <span v-if="saving" class="spinner" /> Aggiungi
+          <span v-if="saving" class="spinner" /> {{ editingDevice ? 'Salva modifiche' : 'Aggiungi' }}
         </button>
       </template>
     </BaseModal>
@@ -326,99 +424,89 @@ onMounted(load);
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
-.device-card {
-  position: relative;
-  min-height: 178px;
+.domotica-named-groups {
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.device-group {
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
-.device-card.on {
-  border-color: rgba(192, 85, 58, 0.38);
-  background: linear-gradient(145deg, var(--surface), var(--primary-soft));
-}
-.device-card.unavailable {
-  opacity: 0.72;
-}
-.device-card-top {
+.device-group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
 }
-.device-icon {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: var(--surface-2);
-  color: var(--muted);
-}
-.device-card.on .device-icon {
-  background: var(--primary);
-  color: #fff;
-}
-.device-remove {
-  color: var(--muted);
-  opacity: 0;
-}
-.device-card:hover .device-remove,
-.device-remove:focus-visible {
-  opacity: 1;
-}
-.device-copy {
+.device-group-expand {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 18px;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
   min-width: 0;
-  padding-right: 52px;
-}
-.device-copy strong {
-  font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.device-status {
-  min-height: 16px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.device-status.active {
-  color: var(--primary);
-  font-weight: 700;
-}
-.device-switch {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--surface-2);
-  color: var(--muted);
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
-.device-switch.on {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
+.device-group-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 12px;
+  background: var(--gold-soft);
+  color: var(--gold);
 }
-.device-switch:disabled {
+.device-group-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.device-group-title strong {
+  font-size: 14px;
+}
+.device-group-title small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.device-group-action {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+.device-group-action.on {
+  border-color: rgba(192, 85, 58, 0.28);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.device-group-action:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
-.device-card.skeleton {
-  justify-content: space-between;
+.device-group-devices {
+  padding: 0 12px 12px;
 }
 .ha-entity-picker {
   display: flex;
@@ -502,8 +590,11 @@ onMounted(load);
   .domotica-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .device-card {
-    min-height: 156px;
+  .device-group-head {
+    padding: 8px;
+  }
+  .device-group-devices {
+    padding: 0 8px 8px;
   }
   .ha-icon-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -513,11 +604,12 @@ onMounted(load);
   .domotica-grid {
     gap: 8px;
   }
-  .device-card {
-    padding: 13px;
+  .device-group-action {
+    width: 38px;
+    padding: 0;
   }
-  .device-remove {
-    opacity: 1;
+  .device-group-action span:not(.spinner) {
+    display: none;
   }
 }
 </style>

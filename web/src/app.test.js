@@ -265,6 +265,19 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.body.textContent).toContain(plant.name);
   }, 20000);
 
+  it('apre il modulo per associare un dispositivo a stanza e gruppo', async () => {
+    await router.push('/domotica');
+    await settle(400);
+    const add = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Aggiungi dispositivo'));
+    expect(add).toBeTruthy();
+    add.click();
+    await settle(200);
+    expect(document.body.textContent).toContain('Gruppo (facoltativo)');
+    expect(document.body.textContent).toContain('I dispositivi con lo stesso gruppo e stanza si comandano insieme.');
+    const cancel = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla');
+    cancel?.click();
+  });
+
   it('apre il generatore di ricette AI (se configurato)', async () => {
     const { useMetaStore } = await import('./stores/meta.js');
     const { useUiStore } = await import('./stores/ui.js');

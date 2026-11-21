@@ -43,7 +43,23 @@ function deviceOut(row) {
     name: row.name,
     entityId: row.entity_id,
     room: row.room || '',
+    groupName: row.group_name || '',
     icon: row.icon,
+  };
+}
+
+function stateIsOn(state) {
+  return state && !['off', 'unavailable', 'unknown'].includes(String(state).toLowerCase());
+}
+
+function serializeDevice(row, state) {
+  const available = Boolean(state) && state.state !== 'unavailable' && state.state !== 'unknown';
+  return {
+    ...deviceOut(row),
+    state: state?.state || 'unavailable',
+    on: Boolean(state && stateIsOn(state.state)),
+    available,
+    friendlyName: state?.attributes?.friendly_name || row.name,
   };
 }
 
@@ -60,17 +76,7 @@ homeAssistantRouter.get('/devices', async (req, res) => {
   try {
     const states = await haFetch('/api/states');
     const stateByEntity = new Map(states.map((state) => [state.entity_id, state]));
-    const devices = rows.map((row) => {
-      const state = stateByEntity.get(row.entity_id);
-      const on = state ? !['off', 'unavailable', 'unknown'].includes(String(state.state).toLowerCase()) : false;
-      return {
-        ...deviceOut(row),
-        state: state?.state || 'unavailable',
-        on,
-        available: Boolean(state) && state.state !== 'unavailable',
-        friendlyName: state?.attributes?.friendly_name || row.name,
-      };
-    });
+    const devices = rows.map((row) => serializeDevice(row, stateByEntity.get(row.entity_id)));
     const availableEntities = states
       .filter((state) => supportedDomains.has(String(state.entity_id).split('.')[0]))
       .map((state) => ({
@@ -95,6 +101,7 @@ const deviceSchema = z.object({
     .regex(/^[a-z0-9_]+\.[a-z0-9_]+$/, 'Inserisci un entity ID valido, ad esempio light.sala.')
     .max(180),
   room: z.string().trim().max(60).nullish(),
+  groupName: z.string().trim().max(60).nullish(),
   icon: z.enum(['power', 'light', 'plug', 'fan', 'thermostat', 'lock', 'tv']).default('power'),
 });
 
@@ -108,12 +115,37 @@ homeAssistantRouter.post('/devices', requireAdmin, (req, res) => {
   const now = nowIso();
   const sort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM domotica_devices').get().next;
   const result = db.prepare(
-    `INSERT INTO domotica_devices (name, entity_id, room, icon, sort_order, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(body.name, body.entityId, body.room || null, body.icon, sort, req.user.id, now, now);
+    `INSERT INTO domotica_devices (name, entity_id, room, group_name, icon, sort_order, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(body.name, body.entityId, body.room || null, body.groupName || null, body.icon, sort, req.user.id, now, now);
   audit(req.user.id, 'add_domotica_device', 'domotica_device', Number(result.lastInsertRowid), { entityId: body.entityId });
   const row = db.prepare('SELECT * FROM domotica_devices WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json({ device: deviceOut(row) });
+});
+
+const deviceUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  room: z.string().trim().max(60).nullish(),
+  groupName: z.string().trim().max(60).nullish(),
+  icon: z.enum(['power', 'light', 'plug', 'fan', 'thermostat', 'lock', 'tv']),
+});
+
+homeAssistantRouter.patch('/devices/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'Dispositivo non valido.');
+  const row = db.prepare('SELECT * FROM domotica_devices WHERE id = ?').get(id);
+  if (!row) throw new HttpError(404, 'Dispositivo non trovato.');
+  const body = validate(deviceUpdateSchema, req.body);
+  db.prepare(
+    `UPDATE domotica_devices
+     SET name = ?, room = ?, group_name = ?, icon = ?, updated_at = ?
+     WHERE id = ?`,
+  ).run(body.name, body.room || null, body.groupName || null, body.icon, nowIso(), id);
+  audit(req.user.id, 'update_domotica_device', 'domotica_device', id, {
+    room: body.room || null,
+    groupName: body.groupName || null,
+  });
+  res.json({ device: deviceOut(db.prepare('SELECT * FROM domotica_devices WHERE id = ?').get(id)) });
 });
 
 homeAssistantRouter.delete('/devices/:id', requireAdmin, (req, res) => {
@@ -130,6 +162,17 @@ const actionSchema = z.object({
   turnOn: z.boolean(),
 });
 
+async function setEntities(domain, service, entityIds) {
+  return haFetch(`/api/services/${domain}/${service}`, {
+    method: 'POST',
+    body: JSON.stringify({ entity_id: entityIds }),
+  });
+}
+
+async function readStates() {
+  return haFetch('/api/states');
+}
+
 homeAssistantRouter.post('/devices/:id/action', async (req, res) => {
   if (!haConfigured()) throw new HttpError(503, 'Home Assistant non è configurato sul server.');
   const id = Number(req.params.id);
@@ -140,18 +183,44 @@ homeAssistantRouter.post('/devices/:id/action', async (req, res) => {
   const domain = row.entity_id.split('.')[0];
   if (!supportedDomains.has(domain)) throw new HttpError(400, 'Questo tipo di entità non è supportato.');
   const service = body.turnOn ? 'turn_on' : 'turn_off';
-  await haFetch(`/api/services/${domain}/${service}`, {
-    method: 'POST',
-    body: JSON.stringify({ entity_id: row.entity_id }),
+  await setEntities(domain, service, row.entity_id);
+  const states = await readStates();
+  res.json({ device: serializeDevice(row, states.find((item) => item.entity_id === row.entity_id)) });
+});
+
+const groupActionSchema = z.object({
+  room: z.string().trim().min(1).max(60),
+  groupName: z.string().trim().min(1).max(60),
+  turnOn: z.boolean(),
+});
+
+homeAssistantRouter.post('/groups/action', async (req, res) => {
+  if (!haConfigured()) throw new HttpError(503, 'Home Assistant non è configurato sul server.');
+  const body = validate(groupActionSchema, req.body);
+  const rows = db
+    .prepare("SELECT * FROM domotica_devices WHERE COALESCE(NULLIF(room, ''), 'Casa') = ? AND group_name = ? ORDER BY sort_order ASC, name COLLATE NOCASE ASC")
+    .all(body.room, body.groupName);
+  if (!rows.length) throw new HttpError(404, 'Gruppo non trovato.');
+
+  const states = await readStates();
+  const stateByEntity = new Map(states.map((state) => [state.entity_id, state]));
+  const availableRows = rows.filter((row) => {
+    const state = stateByEntity.get(row.entity_id);
+    return state && state.state !== 'unavailable' && state.state !== 'unknown';
   });
-  const states = await haFetch('/api/states');
-  const state = states.find((item) => item.entity_id === row.entity_id);
-  res.json({
-    device: {
-      ...deviceOut(row),
-      state: state?.state || 'unavailable',
-      on: state ? !['off', 'unavailable', 'unknown'].includes(String(state.state).toLowerCase()) : false,
-      available: Boolean(state) && state.state !== 'unavailable',
-    },
-  });
+  if (!availableRows.length) throw new HttpError(409, 'Nessun dispositivo del gruppo è disponibile.');
+
+  const service = body.turnOn ? 'turn_on' : 'turn_off';
+  const entitiesByDomain = new Map();
+  for (const row of availableRows) {
+    const domain = row.entity_id.split('.')[0];
+    if (!supportedDomains.has(domain)) continue;
+    if (!entitiesByDomain.has(domain)) entitiesByDomain.set(domain, []);
+    entitiesByDomain.get(domain).push(row.entity_id);
+  }
+  await Promise.all([...entitiesByDomain.entries()].map(([domain, entityIds]) => setEntities(domain, service, entityIds)));
+
+  const updatedStates = await readStates();
+  const updatedByEntity = new Map(updatedStates.map((state) => [state.entity_id, state]));
+  res.json({ devices: rows.map((row) => serializeDevice(row, updatedByEntity.get(row.entity_id))) });
 });

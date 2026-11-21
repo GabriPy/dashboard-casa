@@ -26,7 +26,11 @@ const dashboardPreferencesSchema = z
     }),
     mobileNav: z
       .object({
-        order: z.array(z.enum(MOBILE_NAV_IDS)).length(MOBILE_NAV_IDS.length).refine(uniqueList),
+        order: z
+          .array(z.enum(MOBILE_NAV_IDS))
+          .min(MOBILE_NAV_IDS.length - 1)
+          .max(MOBILE_NAV_IDS.length)
+          .refine(uniqueList),
       })
       .optional(),
   })
@@ -39,9 +43,12 @@ export const DEFAULT_DASHBOARD_PREFERENCES = {
 };
 
 function normalizeDashboardPreferences(preferences, fallback = DEFAULT_DASHBOARD_PREFERENCES) {
+  const mobileOrder = preferences.mobileNav?.order || fallback.mobileNav.order;
   return {
     ...preferences,
-    mobileNav: preferences.mobileNav || fallback.mobileNav,
+    mobileNav: {
+      order: [...mobileOrder, ...DEFAULT_DASHBOARD_PREFERENCES.mobileNav.order.filter((id) => !mobileOrder.includes(id))],
+    },
   };
 }
 

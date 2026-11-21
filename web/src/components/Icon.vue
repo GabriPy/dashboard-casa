@@ -57,6 +57,8 @@ const paths = {
     '<path d="M3 11.2 12 3l9 8.2"/><path d="M5.2 9v11h13.6V9"/><circle cx="12" cy="14.5" r="2.2"/><path d="M8.8 14.5h-2M17.2 14.5h-2M12 11.2V9"/>',
   power:
     '<path d="M12 3v9"/><path d="M7.2 6.4a8.2 8.2 0 1 0 9.6 0"/>',
+  group:
+    '<rect x="3.5" y="4.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="4.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="14.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="14.5" width="7" height="7" rx="1.5"/>',
   bulb:
     '<path d="M9 18h6M10 21h4"/><path d="M8.3 15.2a6 6 0 1 1 7.4 0c-.9.7-1.2 1.6-1.2 2.8h-5c0-1.2-.3-2.1-1.2-2.8Z"/>',
   plug:

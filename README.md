@@ -81,7 +81,7 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 | 🧾 | **Scadenze** | Bollette, documenti, veicoli, casa. Importo, note, ricorrenza mensile o annuale, "fatto" con avanzamento automatico. |
 | 🍳 | **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti, **"aggiungi ingredienti alla spesa"** e **generazione con AI**. |
 | 🪴 | **Piante** | Schede con foto, attività ricorrenti (acqua, concime, potatura, rinvaso, controllo), diario delle cure. |
-| 🏠 | **Domotica** | Dispositivi Home Assistant con stato acceso/spento e azioni accendi/spegni; configurazione e rimozione riservate agli amministratori. |
+| 🏠 | **Domotica** | Dispositivi Home Assistant divisi per stanza, gruppi espandibili e controlli accendi/spegni; gestione riservata agli amministratori. |
 | 📎 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | 👨‍👩‍👧 | **Famiglia** | Profili separati con PIN, ruoli amministratore/famiglia, dati condivisi o privati. |
 | 🔔 | **Promemoria** | Notifiche push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima) e piante (il giorno stesso), con coda persistente. |
@@ -239,7 +239,7 @@ HOME_ASSISTANT_URL=http://homeassistant.local:8123
 HOME_ASSISTANT_TOKEN=il_tuo_token
 ```
 
-Riavvia Ghibiri Home dopo aver salvato le variabili. Tutti i membri possono aprire **Domotica** e usare i dispositivi aggiunti dagli amministratori. L’amministratore può aggiungere luci, prese, ventilatori, `input_boolean` e lettori supportati usando l’entity ID oppure selezionandoli dagli stati disponibili in Home Assistant.
+Riavvia Ghibiri Home dopo aver salvato le variabili. Tutti i membri possono aprire **Domotica** e usare i dispositivi aggiunti dagli amministratori. L’amministratore può aggiungere luci, prese, ventilatori, `input_boolean` e lettori supportati usando l’entity ID oppure selezionandoli dagli stati disponibili in Home Assistant. Assegna stanza e, se vuoi comandare più entità insieme, lo stesso nome di gruppo (ad esempio **Tavolo**): il gruppo avrà un comando unico e potrà essere espanso per agire sui singoli dispositivi.
 
 ### 🤖 Ricette con l'AI
 

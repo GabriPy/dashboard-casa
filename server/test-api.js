@@ -113,14 +113,64 @@ async function main() {
     const status = await call('/api/home-assistant/status');
     assert.equal(status.status, 200);
     assert.equal(typeof status.data.configured, 'boolean');
-    const devices = await call('/api/home-assistant/devices');
-    assert.equal(devices.status, 200);
-    assert.equal(devices.data.configured, false);
-    const blocked = await call('/api/home-assistant/devices', {
-      method: 'POST',
-      body: { name: 'Lampada', entityId: 'light.lampada', room: 'Casa', icon: 'light' },
-    });
-    assert.equal(blocked.status, 503);
+    if (process.env.TEST_HOME_ASSISTANT === 'true') {
+      assert.equal(status.data.configured, true);
+      const first = await call('/api/home-assistant/devices', {
+        method: 'POST',
+        body: { name: 'Tavolo destro', entityId: 'light.table_right', room: 'Soggiorno', groupName: 'Tavolo', icon: 'light' },
+      });
+      assert.equal(first.status, 201);
+      assert.equal(first.data.device.groupName, 'Tavolo');
+      const second = await call('/api/home-assistant/devices', {
+        method: 'POST',
+        body: { name: 'Tavolo sinistro', entityId: 'switch.table_left', room: 'Soggiorno', icon: 'plug' },
+      });
+      assert.equal(second.status, 201);
+      const grouped = await call(`/api/home-assistant/devices/${second.data.device.id}`, {
+        method: 'PATCH',
+        body: { name: 'Tavolo sinistro', room: 'Soggiorno', groupName: 'Tavolo', icon: 'plug' },
+      });
+      assert.equal(grouped.status, 200);
+      assert.equal(grouped.data.device.groupName, 'Tavolo');
+      const member = await login(2, MAMMA_PIN);
+      assert.equal(member.role, 'member');
+      const memberDevices = await call('/api/home-assistant/devices');
+      assert.equal(memberDevices.data.devices.filter((device) => device.groupName === 'Tavolo').length, 2);
+      const turnedOn = await call('/api/home-assistant/groups/action', {
+        method: 'POST',
+        body: { room: 'Soggiorno', groupName: 'Tavolo', turnOn: true },
+      });
+      assert.equal(turnedOn.status, 200);
+      assert.equal(turnedOn.data.devices.every((device) => device.on), true);
+      const turnedOff = await call('/api/home-assistant/groups/action', {
+        method: 'POST',
+        body: { room: 'Soggiorno', groupName: 'Tavolo', turnOn: false },
+      });
+      assert.equal(turnedOff.status, 200);
+      assert.equal(turnedOff.data.devices.every((device) => !device.on), true);
+      const forbidden = await call(`/api/home-assistant/devices/${first.data.device.id}`, {
+        method: 'PATCH',
+        body: { name: 'Altro', room: 'Soggiorno', groupName: null, icon: 'light' },
+      });
+      assert.equal(forbidden.status, 403);
+      await login(1, ADMIN_PIN);
+      await call(`/api/home-assistant/devices/${first.data.device.id}`, { method: 'DELETE' });
+      await call(`/api/home-assistant/devices/${second.data.device.id}`, { method: 'DELETE' });
+    } else {
+      const devices = await call('/api/home-assistant/devices');
+      assert.equal(devices.status, 200);
+      assert.equal(devices.data.configured, false);
+      const blocked = await call('/api/home-assistant/devices', {
+        method: 'POST',
+        body: { name: 'Lampada', entityId: 'light.lampada', room: 'Casa', icon: 'light' },
+      });
+      assert.equal(blocked.status, 503);
+      const blockedGroup = await call('/api/home-assistant/groups/action', {
+        method: 'POST',
+        body: { room: 'Casa', groupName: 'Tavolo', turnOn: false },
+      });
+      assert.equal(blockedGroup.status, 503);
+    }
   });
 
   await step('dashboard', async () => {
@@ -168,6 +218,23 @@ async function main() {
       body: { cards: adminPreferences.cards, sections: adminPreferences.sections },
     });
     assert.deepEqual(legacySave.data.preferences.mobileNav, adminPreferences.mobileNav);
+    const sixLinkOrder = await call('/api/dashboard/preferences', {
+      method: 'PUT',
+      body: {
+        ...adminPreferences,
+        mobileNav: { order: ['plants', 'recipes', 'deadlines', 'calendar', 'shopping', 'today'] },
+      },
+    });
+    assert.deepEqual(sixLinkOrder.data.preferences.mobileNav.order, [
+      'plants',
+      'recipes',
+      'deadlines',
+      'calendar',
+      'shopping',
+      'today',
+      'domotica',
+    ]);
+    await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
 
     await login(2, MAMMA_PIN);
     const memberInitial = await call('/api/dashboard/preferences');

@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS domotica_devices (
   name TEXT NOT NULL,
   entity_id TEXT NOT NULL UNIQUE,
   room TEXT,
+  group_name TEXT,
   icon TEXT NOT NULL DEFAULT 'power',
   sort_order REAL NOT NULL DEFAULT 0,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -280,7 +281,11 @@ if (!recipeColumns.has('source')) {
 if (!recipeColumns.has('source_prompt')) {
   db.exec('ALTER TABLE recipes ADD COLUMN source_prompt TEXT');
 }
-db.pragma('user_version = 7');
+const domoticaColumns = new Set(db.pragma('table_info(domotica_devices)').map((column) => column.name));
+if (!domoticaColumns.has('group_name')) {
+  db.exec('ALTER TABLE domotica_devices ADD COLUMN group_name TEXT');
+}
+db.pragma('user_version = 8');
 
 export const nowIso = () => new Date().toISOString();
 
