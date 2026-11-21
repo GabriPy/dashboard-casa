@@ -153,6 +153,24 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     }, 20000);
   }
 
+  it('nasconde Domotica nel menu Aggiungi per i membri', async () => {
+    const { useAuthStore } = await import('./stores/auth.js');
+    const auth = useAuthStore();
+    const adminUser = auth.user;
+
+    auth.user = { ...adminUser, role: 'member' };
+    document.querySelector('.quick-add').click();
+    await settle(200);
+    expect(document.querySelector('.quick-grid').textContent).not.toContain('Domotica');
+
+    document.querySelector('[aria-label="Chiudi"]').click();
+    auth.user = adminUser;
+    document.querySelector('.quick-add').click();
+    await settle(200);
+    expect(document.querySelector('.quick-grid').textContent).toContain('Domotica');
+    document.querySelector('[aria-label="Chiudi"]').click();
+  });
+
   it('apre il tutorial push come popup nel profilo', async () => {
     await router.push('/profilo');
     await settle(400);

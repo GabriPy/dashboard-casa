@@ -54,17 +54,22 @@ const groupedDevices = computed(() => {
     if (!room.groups.has(device.groupName)) room.groups.set(device.groupName, []);
     room.groups.get(device.groupName).push(device);
   }
-  return [...rooms.values()].map((room) => ({
-    name: room.name,
-    devices: room.devices,
-    groups: [...room.groups.entries()].map(([name, items]) => ({
-      name,
-      items,
-      key: JSON.stringify([room.name, name]),
+  return [...rooms.values()].map((room) => {
+    const items = [...room.devices, ...[...room.groups.values()].flat()];
+    return {
+      name: room.name,
+      devices: room.devices,
+      groups: [...room.groups.entries()].map(([name, groupItems]) => ({
+        name,
+        items: groupItems,
+        key: JSON.stringify([room.name, name]),
+        onCount: groupItems.filter((device) => device.on).length,
+        availableCount: groupItems.filter((device) => device.available).length,
+      })),
+      deviceCount: items.length,
       onCount: items.filter((device) => device.on).length,
-      availableCount: items.filter((device) => device.available).length,
-    })),
-  }));
+    };
+  });
 });
 
 const onCount = computed(() => devices.value.filter((device) => device.on).length);
@@ -262,11 +267,22 @@ onMounted(load);
     <div v-else class="domotica-groups">
       <section v-for="room in groupedDevices" :key="room.name" class="domotica-group">
         <header class="domotica-group-head">
-          <p class="eyebrow">Stanza</p>
-          <h2>{{ room.name }}</h2>
+          <div>
+            <p class="eyebrow">Stanza</p>
+            <h2>{{ room.name }}</h2>
+          </div>
+          <span class="room-summary">
+            <Icon name="home-automation" :size="16" />
+            {{ room.deviceCount }} {{ room.deviceCount === 1 ? 'dispositivo' : 'dispositivi' }} · {{ room.onCount }} accesi
+          </span>
         </header>
-        <div v-if="room.groups.length" class="domotica-named-groups">
-          <article v-for="group in room.groups" :key="group.key" class="device-group">
+        <div class="domotica-grid">
+          <article
+            v-for="group in room.groups"
+            :key="group.key"
+            class="device-group"
+            :class="{ expanded: isGroupExpanded(group.key), on: group.onCount > 0 }"
+          >
             <header class="device-group-head">
               <button
                 type="button"
@@ -275,14 +291,14 @@ onMounted(load);
                 :aria-label="`${isGroupExpanded(group.key) ? 'Comprimi' : 'Espandi'} gruppo ${group.name}`"
                 @click="toggleGroupExpanded(group.key)"
               >
-                <Icon :name="isGroupExpanded(group.key) ? 'chevron-down' : 'chevron-right'" :size="18" />
                 <span class="device-group-icon"><Icon name="group" :size="19" /></span>
                 <span class="device-group-title">
                   <strong>{{ group.name }}</strong>
                   <small>
-                    {{ group.availableCount ? `${group.onCount} accesi · ${group.items.length} dispositivi` : 'Nessun dispositivo disponibile' }}
+                    {{ group.availableCount ? `${group.onCount} di ${group.availableCount} accesi` : 'Non disponibile' }}
                   </small>
                 </span>
+                <Icon class="device-group-chevron" :name="isGroupExpanded(group.key) ? 'chevron-down' : 'chevron-right'" :size="17" />
               </button>
               <button
                 type="button"
@@ -293,10 +309,7 @@ onMounted(load);
                 @click="toggleGroup(group, room.name)"
               >
                 <span v-if="busyGroup === group.key" class="spinner" />
-                <template v-else>
-                  <Icon name="power" :size="17" />
-                  <span>{{ group.onCount ? 'Spegni' : 'Accendi' }}</span>
-                </template>
+                <Icon v-else name="power" :size="17" />
               </button>
             </header>
             <div v-if="isGroupExpanded(group.key)" class="domotica-grid device-group-devices">
@@ -312,8 +325,6 @@ onMounted(load);
               />
             </div>
           </article>
-        </div>
-        <div v-if="room.devices.length" class="domotica-grid">
           <HomeAssistantDeviceCard
             v-for="device in room.devices"
             :key="device.id"
@@ -410,91 +421,139 @@ onMounted(load);
 .domotica-groups {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 30px;
 }
 .domotica-group-head {
-  margin-bottom: 10px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--line);
 }
 .domotica-group-head h2 {
   margin: 2px 0 0;
-  font-size: 20px;
+  font-family: var(--font-serif);
+  font-size: 24px;
+  line-height: 1.15;
+}
+.room-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 .domotica-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.domotica-named-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
+  align-items: start;
+  gap: 13px;
 }
 .device-group {
+  min-width: 0;
+  min-height: 142px;
+  padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 19px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.device-group.on {
+  border-color: rgba(192, 85, 58, 0.3);
+  background: linear-gradient(145deg, var(--surface), var(--primary-soft));
+}
+.device-group.expanded {
+  grid-column: 1 / -1;
 }
 .device-group-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
 }
 .device-group-expand {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: stretch;
   flex: 1;
   min-width: 0;
-  padding: 4px 0;
+  min-height: 110px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  border-radius: 12px;
+}
+.device-group-expand:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
 }
 .device-group-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 15px;
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.device-group.on .device-group-icon {
+  background: var(--primary);
+  color: #fff;
+}
+.device-group-title {
+  position: absolute;
+  right: 24px;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.device-group-title strong {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-group-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.device-group-chevron {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  color: var(--muted);
+}
+.device-group-action {
   width: 38px;
   height: 38px;
   display: grid;
   place-items: center;
   flex: none;
-  border-radius: 12px;
-  background: var(--gold-soft);
-  color: var(--gold);
-}
-.device-group-title {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.device-group-title strong {
-  font-size: 14px;
-}
-.device-group-title small {
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.device-group-action {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 11px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 50%;
   background: var(--surface-2);
   color: var(--ink-soft);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
-  flex: none;
+  transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+.device-group-action:hover:not(:disabled) {
+  transform: scale(1.05);
 }
 .device-group-action.on {
   border-color: rgba(192, 85, 58, 0.28);
@@ -506,7 +565,8 @@ onMounted(load);
   opacity: 0.5;
 }
 .device-group-devices {
-  padding: 0 12px 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(120, 100, 80, 0.14);
 }
 .ha-entity-picker {
   display: flex;
@@ -590,26 +650,20 @@ onMounted(load);
   .domotica-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .device-group-head {
-    padding: 8px;
-  }
-  .device-group-devices {
-    padding: 0 8px 8px;
-  }
   .ha-icon-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 @media (max-width: 420px) {
   .domotica-grid {
-    gap: 8px;
+    gap: 9px;
   }
-  .device-group-action {
-    width: 38px;
-    padding: 0;
+  .domotica-group-head {
+    align-items: flex-start;
   }
-  .device-group-action span:not(.spinner) {
-    display: none;
+  .room-summary {
+    padding-top: 5px;
+    font-size: 11px;
   }
 }
 </style>

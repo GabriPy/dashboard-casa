@@ -34,14 +34,14 @@ const moreNav = computed(() =>
     .map((id) => mobileNavOptions.find((item) => item.id === id)),
 );
 
-const quickItems = [
+const quickItems = computed(() => [
   { label: 'Evento', hint: 'Appuntamento in calendario', icon: 'calendar', to: '/calendario', emoji: '📅' },
   { label: 'Scadenza', hint: 'Bolletta, documento, rinnovo', icon: 'clock', to: '/scadenze', emoji: '📌' },
   { label: 'Spesa', hint: 'Qualcosa da comprare', icon: 'basket', to: '/spesa', emoji: '🛒' },
-  { label: 'Domotica', hint: 'Luci e dispositivi', icon: 'home-automation', to: '/domotica', emoji: '🏠' },
+  ...(auth.isAdmin ? [{ label: 'Domotica', hint: 'Luci e dispositivi', icon: 'home-automation', to: '/domotica', emoji: '🏠' }] : []),
   { label: 'Ricetta', hint: 'Un piatto da ricordare', icon: 'book', to: '/ricette', emoji: '🍝' },
   { label: 'Pianta', hint: 'Una nuova pianta di casa', icon: 'leaf', to: '/piante', emoji: '🪴' },
-];
+]);
 
 const isMoreActive = computed(() =>
   [...moreNav.value.map((item) => item.to), '/profilo', '/impostazioni'].some((path) =>
