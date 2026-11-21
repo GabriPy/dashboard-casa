@@ -65,6 +65,10 @@ export const config = {
       ? String(process.env.AI_JSON_MODE).toLowerCase()
       : 'object',
   },
+  homeAssistant: {
+    url: (process.env.HOME_ASSISTANT_URL || '').replace(/\/+$/, ''),
+    token: process.env.HOME_ASSISTANT_TOKEN || '',
+  },
   seed: {
     adminPin: process.env.ADMIN_PIN || '',
     adminName: process.env.ADMIN_NAME || 'Gabriele',

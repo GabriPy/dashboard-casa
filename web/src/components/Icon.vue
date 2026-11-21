@@ -53,6 +53,22 @@ const paths = {
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   grip:
     '<circle cx="8" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="19" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="19" r="1" fill="currentColor" stroke="none"/>',
+  'home-automation':
+    '<path d="M3 11.2 12 3l9 8.2"/><path d="M5.2 9v11h13.6V9"/><circle cx="12" cy="14.5" r="2.2"/><path d="M8.8 14.5h-2M17.2 14.5h-2M12 11.2V9"/>',
+  power:
+    '<path d="M12 3v9"/><path d="M7.2 6.4a8.2 8.2 0 1 0 9.6 0"/>',
+  bulb:
+    '<path d="M9 18h6M10 21h4"/><path d="M8.3 15.2a6 6 0 1 1 7.4 0c-.9.7-1.2 1.6-1.2 2.8h-5c0-1.2-.3-2.1-1.2-2.8Z"/>',
+  plug:
+    '<path d="M8.5 7V3M15.5 7V3M6.5 7h11v4a5.5 5.5 0 0 1-11 0V7Z"/><path d="M12 16.5V21"/>',
+  fan:
+    '<circle cx="12" cy="12" r="1.8"/><path d="M12 10.2c-1.2-4.7 1.2-6.8 3.2-6.2 2.2.7 1.9 4.6-1.4 6.5M13.6 12.8c4.4 1.8 4.8 4.8 3.1 6.2-1.8 1.5-5-.6-5.1-4.4M10.2 12.8c-3.2 3.6-6.2 2.9-6.8 1-0.7-2.1 2.6-4.2 6.1-2.2"/>',
+  thermostat:
+    '<path d="M9 14.5V5.8a3 3 0 0 1 6 0v8.7a5 5 0 1 1-6 0Z"/><path d="M12 8v7"/><circle cx="12" cy="17" r="1.4"/>',
+  lock:
+    '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1"/><path d="M12 16v2"/>',
+  tv:
+    '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 21h8M12 18v3"/>',
   refresh: '<path d="M20.6 12a8.6 8.6 0 1 1-2.6-6.2"/><path d="M20.8 3.4v5.2h-5.2"/>',
   shield: '<path d="M12 3.2 20 6v6.1c0 4.9-3.5 7.9-8 9-4.5-1.1-8-4.1-8-9V6l8-2.8Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
   database: '<ellipse cx="12" cy="6" rx="7.6" ry="3"/><path d="M4.4 6v12c0 1.7 3.4 3 7.6 3s7.6-1.3 7.6-3V6"/><path d="M4.4 12c0 1.7 3.4 3 7.6 3s7.6-1.3 7.6-3"/>',

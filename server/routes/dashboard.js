@@ -12,7 +12,7 @@ dashboardRouter.use(requireAuth);
 
 const CARD_IDS = ['shopping', 'deadlines', 'plants', 'recipes'];
 const SECTION_IDS = ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'];
-const MOBILE_NAV_IDS = ['today', 'shopping', 'calendar', 'deadlines', 'recipes', 'plants'];
+const MOBILE_NAV_IDS = ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants'];
 const uniqueList = (values) => new Set(values).size === values.length;
 const dashboardPreferencesSchema = z
   .object({

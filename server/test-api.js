@@ -109,6 +109,20 @@ async function main() {
     await login(1, ADMIN_PIN);
   });
 
+  await step('Home Assistant non configurato e accesso sicuro', async () => {
+    const status = await call('/api/home-assistant/status');
+    assert.equal(status.status, 200);
+    assert.equal(typeof status.data.configured, 'boolean');
+    const devices = await call('/api/home-assistant/devices');
+    assert.equal(devices.status, 200);
+    assert.equal(devices.data.configured, false);
+    const blocked = await call('/api/home-assistant/devices', {
+      method: 'POST',
+      body: { name: 'Lampada', entityId: 'light.lampada', room: 'Casa', icon: 'light' },
+    });
+    assert.equal(blocked.status, 503);
+  });
+
   await step('dashboard', async () => {
     const { status, data } = await call('/api/dashboard');
     assert.equal(status, 200);
@@ -126,7 +140,7 @@ async function main() {
         order: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
         visible: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
       },
-      mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'recipes', 'plants'] },
+      mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants'] },
     };
     const initial = await call('/api/dashboard/preferences');
     assert.deepEqual(initial.data.preferences, defaults);
@@ -134,7 +148,7 @@ async function main() {
     const adminPreferences = {
       cards: { order: ['recipes', 'plants', 'deadlines', 'shopping'], visible: ['recipes', 'plants'] },
       sections: { order: ['recipe', 'plants', 'shopping', 'deadlines', 'agenda'], visible: ['recipe', 'plants', 'agenda'] },
-      mobileNav: { order: ['recipes', 'plants', 'deadlines', 'shopping', 'calendar', 'today'] },
+      mobileNav: { order: ['recipes', 'plants', 'deadlines', 'shopping', 'calendar', 'today', 'domotica'] },
     };
     const savedAdmin = await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
     assert.equal(savedAdmin.status, 200);
@@ -146,7 +160,7 @@ async function main() {
     assert.equal(invalid.status, 400);
     const invalidNavigation = await call('/api/dashboard/preferences', {
       method: 'PUT',
-      body: { ...adminPreferences, mobileNav: { order: ['today', 'today', 'calendar', 'deadlines', 'recipes', 'plants'] } },
+      body: { ...adminPreferences, mobileNav: { order: ['today', 'today', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants'] } },
     });
     assert.equal(invalidNavigation.status, 400);
     const legacySave = await call('/api/dashboard/preferences', {
@@ -161,7 +175,7 @@ async function main() {
     const memberPreferences = {
       cards: { order: ['deadlines', 'shopping', 'plants', 'recipes'], visible: ['deadlines', 'shopping', 'plants', 'recipes'] },
       sections: defaults.sections,
-      mobileNav: { order: ['shopping', 'today', 'calendar', 'deadlines', 'plants', 'recipes'] },
+      mobileNav: { order: ['shopping', 'today', 'calendar', 'deadlines', 'plants', 'recipes', 'domotica'] },
     };
     const savedMember = await call('/api/dashboard/preferences', { method: 'PUT', body: memberPreferences });
     assert.deepEqual(savedMember.data.preferences, memberPreferences);

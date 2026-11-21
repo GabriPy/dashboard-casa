@@ -133,6 +133,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     ['/scadenze', 'Scadenze'],
     ['/ricette', 'Ricettario'],
     ['/piante', 'Le piante'],
+    ['/domotica', 'Domotica'],
     ['/impostazioni', 'Impostazioni'],
     ['/profilo', 'Profilo'],
   ];
@@ -230,7 +231,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.body.textContent).toContain('Ordine dei collegamenti');
     expect(document.body.textContent).toContain('I primi 4 sono nella barra in basso');
     expect(document.body.textContent).toContain('Impostazioni, Profilo ed Esci restano fissi in fondo al menu Altro.');
-    expect(document.querySelectorAll('.sort-handle')).toHaveLength(15);
+    expect(document.querySelectorAll('.sort-handle')).toHaveLength(16);
     expect(document.querySelector('[aria-label="Sposta Spesa in alto"]')).toBeNull();
 
     const { useAuthStore } = await import('./stores/auth.js');

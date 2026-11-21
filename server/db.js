@@ -243,6 +243,19 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
+
+CREATE TABLE IF NOT EXISTS domotica_devices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  entity_id TEXT NOT NULL UNIQUE,
+  room TEXT,
+  icon TEXT NOT NULL DEFAULT 'power',
+  sort_order REAL NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_domotica_devices_sort ON domotica_devices(sort_order, name);
 `;
 
 db.exec(SCHEMA);
@@ -267,7 +280,7 @@ if (!recipeColumns.has('source')) {
 if (!recipeColumns.has('source_prompt')) {
   db.exec('ALTER TABLE recipes ADD COLUMN source_prompt TEXT');
 }
-db.pragma('user_version = 6');
+db.pragma('user_version = 7');
 
 export const nowIso = () => new Date().toISOString();
 

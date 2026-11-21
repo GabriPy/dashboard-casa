@@ -50,6 +50,18 @@ Formato errore:
 | PUT | `/api/dashboard/preferences` | Aggiorna le preferenze personali; i primi 4 collegamenti mobili compaiono nella barra in basso, gli altri in **Altro**. |
 | GET | `/api/search?q=testo` | Ricerca trasversale (min. 2 caratteri), rispetta la privacy. |
 
+## Domotica
+
+Gli endpoint richiedono sessione. Le azioni accedono a Home Assistant solo tramite il backend.
+
+| Metodo | Percorso | Accesso | Note |
+| --- | --- | --- | --- |
+| GET | `/api/home-assistant/status` | autenticato | Indica se URL e token sono configurati sul server. |
+| GET | `/api/home-assistant/devices` | autenticato | Stati correnti e entità disponibili in Home Assistant. |
+| POST | `/api/home-assistant/devices` | amministratore | Aggiunge un mapping `{ name, entityId, room, icon }`. |
+| DELETE | `/api/home-assistant/devices/:id` | amministratore | Rimuove il dispositivo da Ghibiri Home. |
+| POST | `/api/home-assistant/devices/:id/action` | autenticato | Body `{ turnOn }`; chiama `turn_on` o `turn_off` nel dominio dell’entità. |
+
 ## Eventi
 
 | Metodo | Percorso | Note |

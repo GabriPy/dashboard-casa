@@ -18,6 +18,7 @@ export const mobileNavOptions = [
   { id: 'shopping', label: 'Spesa', icon: 'basket', to: '/spesa', hint: 'Lista della spesa', tone: '' },
   { id: 'calendar', label: 'Calendario', icon: 'calendar', to: '/calendario', hint: 'Eventi e appuntamenti', tone: '' },
   { id: 'deadlines', label: 'Scadenze', icon: 'clock', to: '/scadenze', hint: 'Promemoria e scadenze', tone: '' },
+  { id: 'domotica', label: 'Domotica', icon: 'home-automation', to: '/domotica', hint: 'Luci e dispositivi', tone: 'gold' },
   { id: 'recipes', label: 'Ricette', icon: 'book', to: '/ricette', hint: 'Il ricettario di casa', tone: 'rose' },
   { id: 'plants', label: 'Piante', icon: 'leaf', to: '/piante', hint: 'Cura e diario verde', tone: 'sage' },
 ];
