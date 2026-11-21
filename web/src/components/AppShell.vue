@@ -22,16 +22,23 @@ const router = useRouter();
 const quickAddOpen = ref(false);
 const moreOpen = ref(false);
 
-const nav = mobileNavOptions.map(({ label, icon, to }) => ({ label, icon, to }));
+const logNavItem = { id: 'logs', label: 'Log', hint: 'Attività della casa', icon: 'list', to: '/log', tone: 'sage' };
+const nav = computed(() => [
+  ...mobileNavOptions.map(({ label, icon, to }) => ({ label, icon, to })),
+  ...(auth.isAdmin ? [logNavItem] : []),
+]);
 const bottomNav = computed(() =>
   dashboardPreferences.preferences.mobileNav.order
     .slice(0, 4)
     .map((id) => mobileNavOptions.find((item) => item.id === id)),
 );
 const moreNav = computed(() =>
-  dashboardPreferences.preferences.mobileNav.order
-    .slice(4)
-    .map((id) => mobileNavOptions.find((item) => item.id === id)),
+  [
+    ...dashboardPreferences.preferences.mobileNav.order
+      .slice(4)
+      .map((id) => mobileNavOptions.find((item) => item.id === id)),
+    ...(auth.isAdmin ? [logNavItem] : []),
+  ],
 );
 
 const quickItems = computed(() => [

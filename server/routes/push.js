@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { config, pushConfigured } from '../config.js';
-import { db, nowIso } from '../db.js';
+import { audit, db, nowIso } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { HttpError, validate } from '../lib/http.js';
 import { pushTitle, sendPushNotification } from '../push.js';
@@ -80,6 +80,7 @@ pushRouter.put('/preferences', (req, res) => {
     Number(preferences.plants),
     nowIso(),
   );
+  audit(req.user.id, 'update_push_preferences');
   res.json({ preferences });
 });
 
@@ -92,13 +93,15 @@ pushRouter.post('/subscriptions', (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, updated_at = excluded.updated_at`,
   ).run(req.user.id, body.endpoint, body.keys.p256dh, body.keys.auth, now, now);
+  audit(req.user.id, 'push_subscription_added');
   const subscriptionCount = db.prepare('SELECT COUNT(*) AS count FROM push_subscriptions WHERE user_id = ?').get(req.user.id).count;
   res.status(201).json({ ok: true, subscriptionCount });
 });
 
 pushRouter.delete('/subscriptions', (req, res) => {
   const body = validate(z.object({ endpoint: endpointSchema }), req.body);
-  db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(req.user.id, body.endpoint);
+  const result = db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(req.user.id, body.endpoint);
+  if (result.changes) audit(req.user.id, 'push_subscription_removed');
   res.json({ ok: true });
 });
 
@@ -125,5 +128,6 @@ pushRouter.post('/test', async (req, res) => {
     console.error(`[push] prova non riuscita per il profilo ${req.user.id}:`, err.message);
     throw new HttpError(502, 'Invio della notifica di prova non riuscito.');
   }
+  audit(req.user.id, 'push_test_sent');
   res.json({ ok: true });
 });

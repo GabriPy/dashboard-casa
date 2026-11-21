@@ -76,6 +76,24 @@ async function main() {
     assert.equal(user.role, 'admin');
   });
 
+  await step('registro attività riservato agli amministratori', async () => {
+    await login(1, ADMIN_PIN);
+    const firstPage = await call('/api/logs?limit=1');
+    assert.equal(firstPage.status, 200);
+    assert.equal(firstPage.data.logs.length, 1);
+    assert.equal(typeof firstPage.data.logs[0].actorName, 'string');
+    assert.equal(typeof firstPage.data.logs[0].action, 'string');
+    if (firstPage.data.nextCursor) {
+      const olderPage = await call(`/api/logs?limit=1&beforeId=${firstPage.data.nextCursor}`);
+      assert.equal(olderPage.status, 200);
+      assert.ok(olderPage.data.logs[0].id < firstPage.data.logs[0].id);
+    }
+
+    await login(2, MAMMA_PIN);
+    assert.equal((await call('/api/logs')).status, 403);
+    await login(1, ADMIN_PIN);
+  });
+
   await step('stato notifiche push autenticato', async () => {
     const status = await call('/api/push/status');
     assert.equal(status.status, 200);

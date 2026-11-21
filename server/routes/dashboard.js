@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { db } from '../db.js';
+import { audit, db } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { validate } from '../lib/http.js';
 import { addDays, expandRecurrence, todayLocal } from '../lib/time.js';
@@ -85,6 +85,7 @@ dashboardRouter.put('/preferences', (req, res) => {
     `INSERT INTO dashboard_preferences (user_id, preferences, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET preferences = excluded.preferences, updated_at = excluded.updated_at`,
   ).run(req.user.id, JSON.stringify(preferences), new Date().toISOString());
+  audit(req.user.id, 'update_dashboard_preferences');
   res.json({ preferences });
 });
 

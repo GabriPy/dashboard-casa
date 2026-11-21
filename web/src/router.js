@@ -35,6 +35,7 @@ const router = createRouter({
         },
         { path: 'piante', name: 'plants', component: () => import('@/views/PianteView.vue'), meta: { title: 'Piante' } },
         { path: 'domotica', name: 'home-automation', component: () => import('@/views/DomoticaView.vue'), meta: { title: 'Domotica' } },
+        { path: 'log', name: 'logs', component: () => import('@/views/LogView.vue'), meta: { title: 'Log', admin: true } },
         {
           path: 'piante/:id',
           name: 'plant',

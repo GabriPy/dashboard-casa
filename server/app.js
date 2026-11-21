@@ -25,6 +25,7 @@ import { backupRouter } from './routes/backup.js';
 import { aiRouter } from './routes/ai.js';
 import { pushRouter } from './routes/push.js';
 import { homeAssistantRouter } from './routes/home-assistant.js';
+import { logsRouter } from './routes/logs.js';
 
 export function createApp() {
   const app = express();
@@ -127,6 +128,7 @@ export function createApp() {
   app.use('/api/ai', aiRouter);
   app.use('/api/push', pushRouter);
   app.use('/api/home-assistant', homeAssistantRouter);
+  app.use('/api/logs', logsRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Endpoint non trovato.', code: 'not_found' });

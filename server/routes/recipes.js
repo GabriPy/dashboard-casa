@@ -181,6 +181,7 @@ recipesRouter.post('/:id/favorite', (req, res) => {
   const row = getRecipe(id);
   const next = row.favorite ? 0 : 1;
   db.prepare('UPDATE recipes SET favorite = ? WHERE id = ?').run(next, id);
+  audit(req.user.id, 'toggle_recipe_favorite', 'recipe', id, { favorite: Boolean(next), title: row.title });
   res.json({ favorite: Boolean(next) });
 });
 

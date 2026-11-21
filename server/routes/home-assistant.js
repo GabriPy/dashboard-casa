@@ -184,6 +184,7 @@ homeAssistantRouter.post('/devices/:id/action', async (req, res) => {
   if (!supportedDomains.has(domain)) throw new HttpError(400, 'Questo tipo di entità non è supportato.');
   const service = body.turnOn ? 'turn_on' : 'turn_off';
   await setEntities(domain, service, row.entity_id);
+  audit(req.user.id, 'control_domotica_device', 'domotica_device', id, { name: row.name, turnOn: body.turnOn });
   const states = await readStates();
   res.json({ device: serializeDevice(row, states.find((item) => item.entity_id === row.entity_id)) });
 });
@@ -219,6 +220,12 @@ homeAssistantRouter.post('/groups/action', async (req, res) => {
     entitiesByDomain.get(domain).push(row.entity_id);
   }
   await Promise.all([...entitiesByDomain.entries()].map(([domain, entityIds]) => setEntities(domain, service, entityIds)));
+  audit(req.user.id, 'control_domotica_group', 'domotica_device', null, {
+    room: body.room,
+    groupName: body.groupName,
+    turnOn: body.turnOn,
+    devicesCount: availableRows.length,
+  });
 
   const updatedStates = await readStates();
   const updatedByEntity = new Map(updatedStates.map((state) => [state.entity_id, state]));

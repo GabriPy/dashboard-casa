@@ -222,6 +222,7 @@ plantsRouter.patch('/tasks/:taskId', (req, res) => {
     taskId,
   );
   syncPlantTaskReminders(taskId);
+  audit(req.user.id, 'update_plant_task', 'plant_task', taskId, { type: body.type ?? task.type });
   res.json({ plant: plantPayload(getPlant(task.plant_id)) });
 });
 
@@ -231,6 +232,7 @@ plantsRouter.delete('/tasks/:taskId', (req, res) => {
   if (!task) throw new HttpError(404, 'Attività non trovata.');
   db.prepare('DELETE FROM plant_tasks WHERE id = ?').run(taskId);
   removeEntityReminders('plant_task', taskId);
+  audit(req.user.id, 'delete_plant_task', 'plant_task', taskId, { type: task.type });
   res.json({ plant: plantPayload(getPlant(task.plant_id)) });
 });
 

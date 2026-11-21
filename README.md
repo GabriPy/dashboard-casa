@@ -82,6 +82,7 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 | 🍳 | **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti, **"aggiungi ingredienti alla spesa"** e **generazione con AI**. |
 | 🪴 | **Piante** | Schede con foto, attività ricorrenti (acqua, concime, potatura, rinvaso, controllo), diario delle cure. |
 | 🏠 | **Domotica** | Dispositivi Home Assistant divisi per stanza, gruppi espandibili e controlli accendi/spegni; gestione riservata agli amministratori. |
+| 📋 | **Log** | Registro delle attività della casa, visibile solo agli amministratori. |
 | 📎 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | 👨‍👩‍👧 | **Famiglia** | Profili separati con PIN, ruoli amministratore/famiglia, dati condivisi o privati. |
 | 🔔 | **Promemoria** | Notifiche push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima) e piante (il giorno stesso), con coda persistente. |

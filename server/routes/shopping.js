@@ -71,6 +71,7 @@ shoppingRouter.patch('/lists/:id', (req, res) => {
   );
   if (body.name) db.prepare('UPDATE shopping_lists SET name = ? WHERE id = ?').run(body.name, id);
   if (body.emoji) db.prepare('UPDATE shopping_lists SET emoji = ? WHERE id = ?').run(body.emoji, id);
+  audit(req.user.id, 'update_shopping_list', 'shopping_list', id, { fields: Object.keys(body) });
   res.json({ list: listsWithCounts().find((l) => l.id === id) });
 });
 
@@ -123,6 +124,7 @@ shoppingRouter.post('/lists/:id/items', (req, res) => {
         body.unit || null,
         existing.id,
       );
+      audit(req.user.id, 'update_shopping_item', 'shopping_item', existing.id, { name: existing.name });
     }
     const row = db.prepare('SELECT * FROM shopping_items WHERE id = ?').get(existing.id);
     return res.json({ item: shoppingItemOut(row), merged: true });
@@ -179,6 +181,7 @@ shoppingRouter.patch('/items/:id', (req, res) => {
     done ? item.done_at || nowIso() : null,
     id,
   );
+  audit(req.user.id, 'update_shopping_item', 'shopping_item', id, { name: body.name ?? item.name, done });
   res.json({ item: shoppingItemOut(db.prepare('SELECT * FROM shopping_items WHERE id = ?').get(id)) });
 });
 
@@ -187,6 +190,7 @@ shoppingRouter.delete('/items/:id', (req, res) => {
   const item = db.prepare('SELECT * FROM shopping_items WHERE id = ?').get(id);
   if (!item) throw new HttpError(404, 'Prodotto non trovato.');
   db.prepare('DELETE FROM shopping_items WHERE id = ?').run(id);
+  audit(req.user.id, 'delete_shopping_item', 'shopping_item', id, { name: item.name });
   res.json({ ok: true });
 });
 

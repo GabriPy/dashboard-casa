@@ -134,6 +134,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     ['/ricette', 'Ricettario'],
     ['/piante', 'Le piante'],
     ['/domotica', 'Domotica'],
+    ['/log', 'Log'],
     ['/impostazioni', 'Impostazioni'],
     ['/profilo', 'Profilo'],
   ];
@@ -152,6 +153,25 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
       expect(fatal, `errori console su ${path}: ${fatal.join(' | ')}`).toEqual([]);
     }, 20000);
   }
+
+  it('riserva la pagina Log agli amministratori', async () => {
+    const { useAuthStore } = await import('./stores/auth.js');
+    const auth = useAuthStore();
+    const adminUser = auth.user;
+    auth.user = { ...adminUser, role: 'member' };
+    await settle(100);
+
+    expect(document.querySelector('.side-nav').textContent).not.toContain('Log');
+    document.querySelector('.bottom-link:last-child').click();
+    await settle(150);
+    expect(document.querySelector('.more-list').textContent).not.toContain('Log');
+    document.querySelector('[aria-label="Chiudi"]').click();
+
+    await router.push('/log');
+    await settle(150);
+    expect(router.currentRoute.value.path).toBe('/');
+    auth.user = adminUser;
+  });
 
   it('nasconde Domotica nel menu Aggiungi per i membri', async () => {
     const { useAuthStore } = await import('./stores/auth.js');

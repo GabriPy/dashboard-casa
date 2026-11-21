@@ -50,6 +50,12 @@ Formato errore:
 | PUT | `/api/dashboard/preferences` | Aggiorna le preferenze personali; i primi 4 collegamenti mobili compaiono nella barra in basso, gli altri in **Altro**. |
 | GET | `/api/search?q=testo` | Ricerca trasversale (min. 2 caratteri), rispetta la privacy. |
 
+## Log (solo amministratore)
+
+| Metodo | Percorso | Note |
+| --- | --- | --- |
+| GET | `/api/logs?limit=50&beforeId=123` | Attività ordinate dalla più recente; `limit` massimo 100 e `beforeId` per caricare le pagine precedenti. |
+
 ## Domotica
 
 Gli endpoint richiedono sessione. Le azioni accedono a Home Assistant solo tramite il backend.
