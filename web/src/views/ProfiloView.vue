@@ -26,7 +26,7 @@ const pushPermission = ref('unsupported');
 const pushEnabledHere = ref(false);
 const pushBusy = ref(false);
 const pushTutorialOpen = ref(false);
-const pushPreferences = ref({ enabled: true, events: true, deadlines: true, plants: true });
+const pushPreferences = ref({ enabled: true, events: true, deadlines: true, plants: true, vehicles: true });
 const pushPreferencesLoading = ref(true);
 const pushPreferencesSaving = ref(false);
 const secureContext = typeof window !== 'undefined' && window.isSecureContext;
@@ -351,6 +351,22 @@ onMounted(async () => {
               :aria-checked="pushPreferences.plants"
               :disabled="pushPreferencesLoading || pushPreferencesSaving"
               @click="togglePushPreference('plants')"
+            />
+          </div>
+          <div class="switch-row push-preference-row">
+            <div class="push-preference-copy">
+              <strong>Veicoli</strong>
+              <p class="hint">Promemoria per revisioni, assicurazioni e manutenzioni.</p>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: pushPreferences.vehicles }"
+              role="switch"
+              aria-label="Notifiche per i veicoli"
+              :aria-checked="pushPreferences.vehicles"
+              :disabled="pushPreferencesLoading || pushPreferencesSaving"
+              @click="togglePushPreference('vehicles')"
             />
           </div>
         </div>

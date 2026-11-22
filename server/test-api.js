@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { addDays, todayLocal } from './lib/time.js';
+import { buildReminderContent } from './reminder-content.js';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const ADMIN_PIN = process.env.TEST_ADMIN_PIN || '1234';
@@ -94,6 +95,118 @@ async function main() {
     await login(1, ADMIN_PIN);
   });
 
+  await step('veicoli: veicolo, utente principale e registro manutenzioni', async () => {
+    const today = todayLocal();
+    const vehicles = await call('/api/vehicles');
+    assert.equal(vehicles.status, 200);
+    assert.ok(vehicles.data.users.some((user) => user.id === 2));
+    const created = await call('/api/vehicles', {
+      method: 'POST',
+      body: {
+        name: `Scooter test ${stamp}`,
+        type: 'scooter',
+        plate: 'AB123CD',
+        mainUserId: 2,
+        notes: 'Test API',
+      },
+    });
+    assert.equal(created.status, 201);
+    const vehicleId = created.data.vehicle.id;
+    assert.equal(created.data.vehicle.type, 'scooter');
+    assert.equal(created.data.vehicle.mainUser.name, 'Mamma');
+    const updatedVehicle = await call(`/api/vehicles/${vehicleId}`, {
+      method: 'PATCH',
+      body: { name: `Scooter casa ${stamp}`, mainUserId: 1 },
+    });
+    assert.equal(updatedVehicle.status, 200);
+    assert.equal(updatedVehicle.data.vehicle.mainUser.name, 'Gabriele');
+
+    const fuel = await call(`/api/vehicles/${vehicleId}/records`, {
+      method: 'POST',
+      body: {
+        type: 'fuel',
+        occurredOn: today,
+        odometer: 12000,
+        amount: 12.5,
+        liters: 8.2,
+        description: 'Pieno',
+      },
+    });
+    assert.equal(fuel.status, 201);
+    const service = await call(`/api/vehicles/${vehicleId}/records`, {
+      method: 'POST',
+      body: {
+        type: 'service',
+        occurredOn: today,
+        odometer: 21500,
+        amount: 89,
+        description: 'Tagliando',
+        nextDueDate: addDays(today, 3),
+        nextDueOdometer: 22000,
+      },
+    });
+    assert.equal(service.status, 201);
+    const distanceNotice = buildReminderContent(
+      'vehicle_record',
+      {
+        type: 'service',
+        vehicle_name: `Scooter casa ${stamp}`,
+        current_odometer: 21500,
+        vehicle_plate: 'AB123CD',
+        description: 'Tagliando',
+      },
+      { occurrence_at: `km:${service.data.record.id}:22000` },
+    );
+    assert.match(distanceNotice.text, /Mancano 500 km/);
+
+    const resynced = await call('/api/settings/resync-reminders', { method: 'POST' });
+    assert.equal(resynced.status, 200);
+    const queuedReminders = await call('/api/settings');
+    const vehicleReminders = queuedReminders.data.reminders.filter(
+      (reminder) => reminder.entity_type === 'vehicle_record' && reminder.label === `Scooter casa ${stamp} · Manutenzione`,
+    );
+    assert.ok(vehicleReminders.some((reminder) => reminder.occurrence_at.startsWith('date:')), 'manca il promemoria per data');
+    assert.ok(vehicleReminders.some((reminder) => reminder.occurrence_at.startsWith('km:')), 'manca il promemoria per chilometraggio');
+    assert.ok(vehicleReminders.every((reminder) => reminder.status === 'pending'));
+
+    const detail = await call(`/api/vehicles/${vehicleId}`);
+    assert.equal(detail.status, 200);
+    assert.equal(detail.data.records.length, 2);
+    assert.equal(detail.data.records[0].type, 'service');
+    assert.equal(detail.data.vehicle.recordCount, 2);
+    assert.equal(detail.data.vehicle.lastOdometer, 21500);
+    const updated = await call(`/api/vehicles/${vehicleId}/records/${fuel.data.record.id}`, {
+      method: 'PATCH',
+      body: { description: 'Rifornimento', liters: 7.9 },
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.data.record.description, 'Rifornimento');
+    const summary = await call('/api/vehicles');
+    assert.equal(summary.data.vehicles[0].recordCount, 2);
+    assert.equal(summary.data.vehicles[0].lastOdometer, 21500);
+    assert.equal(summary.data.vehicles[0].nextDueOdometer, 22000);
+
+    const invalidOwner = await call('/api/vehicles', {
+      method: 'POST',
+      body: { name: 'Veicolo invalido', type: 'car', mainUserId: 99999 },
+    });
+    assert.equal(invalidOwner.status, 400);
+    const invalidType = await call('/api/vehicles', {
+      method: 'POST',
+      body: { name: 'Veicolo invalido', type: 'bicycle' },
+    });
+    assert.equal(invalidType.status, 400);
+
+    await login(2, MAMMA_PIN);
+    assert.equal((await call(`/api/vehicles/${vehicleId}`)).status, 200);
+    await call(`/api/vehicles/${vehicleId}/records/${fuel.data.record.id}`, { method: 'DELETE' });
+    await login(1, ADMIN_PIN);
+    await call(`/api/vehicles/${vehicleId}`, { method: 'DELETE' });
+    assert.equal((await call(`/api/vehicles/${vehicleId}`)).status, 404);
+    const queueAfterDelete = await call('/api/settings');
+    assert.ok(!queueAfterDelete.data.reminders.some((reminder) => reminder.label === `Scooter casa ${stamp} · Manutenzione`));
+  });
+
   await step('stato notifiche push autenticato', async () => {
     const status = await call('/api/push/status');
     assert.equal(status.status, 200);
@@ -107,8 +220,11 @@ async function main() {
   });
 
   await step('preferenze push per profilo e categoria', async () => {
-    const defaults = { enabled: true, events: true, deadlines: true, plants: true };
-    const adminPreferences = { ...defaults, events: false, plants: false };
+    const defaults = { enabled: true, events: true, deadlines: true, plants: true, vehicles: true };
+    const legacy = { enabled: true, events: true, deadlines: true, plants: true };
+    const legacySave = await call('/api/push/preferences', { method: 'PUT', body: legacy });
+    assert.deepEqual(legacySave.data.preferences, defaults);
+    const adminPreferences = { ...defaults, events: false, plants: false, vehicles: false };
     const savedAdmin = await call('/api/push/preferences', { method: 'PUT', body: adminPreferences });
     assert.deepEqual(savedAdmin.data.preferences, adminPreferences);
     assert.deepEqual((await call('/api/push/preferences')).data.preferences, adminPreferences);
@@ -208,7 +324,7 @@ async function main() {
         order: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
         visible: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
       },
-      mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants'] },
+      mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants', 'vehicles'] },
     };
     const initial = await call('/api/dashboard/preferences');
     assert.deepEqual(initial.data.preferences, defaults);
@@ -216,7 +332,7 @@ async function main() {
     const adminPreferences = {
       cards: { order: ['recipes', 'plants', 'deadlines', 'shopping'], visible: ['recipes', 'plants'] },
       sections: { order: ['recipe', 'plants', 'shopping', 'deadlines', 'agenda'], visible: ['recipe', 'plants', 'agenda'] },
-      mobileNav: { order: ['recipes', 'plants', 'deadlines', 'shopping', 'calendar', 'today', 'domotica'] },
+      mobileNav: { order: ['recipes', 'plants', 'deadlines', 'shopping', 'calendar', 'today', 'domotica', 'vehicles'] },
     };
     const savedAdmin = await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
     assert.equal(savedAdmin.status, 200);
@@ -228,7 +344,7 @@ async function main() {
     assert.equal(invalid.status, 400);
     const invalidNavigation = await call('/api/dashboard/preferences', {
       method: 'PUT',
-      body: { ...adminPreferences, mobileNav: { order: ['today', 'today', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants'] } },
+      body: { ...adminPreferences, mobileNav: { order: ['today', 'today', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants', 'vehicles'] } },
     });
     assert.equal(invalidNavigation.status, 400);
     const legacySave = await call('/api/dashboard/preferences', {
@@ -251,6 +367,24 @@ async function main() {
       'shopping',
       'today',
       'domotica',
+      'vehicles',
+    ]);
+    const sevenLinkOrder = await call('/api/dashboard/preferences', {
+      method: 'PUT',
+      body: {
+        ...adminPreferences,
+        mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants'] },
+      },
+    });
+    assert.deepEqual(sevenLinkOrder.data.preferences.mobileNav.order, [
+      'today',
+      'shopping',
+      'calendar',
+      'deadlines',
+      'domotica',
+      'recipes',
+      'plants',
+      'vehicles',
     ]);
     await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
 
@@ -260,7 +394,7 @@ async function main() {
     const memberPreferences = {
       cards: { order: ['deadlines', 'shopping', 'plants', 'recipes'], visible: ['deadlines', 'shopping', 'plants', 'recipes'] },
       sections: defaults.sections,
-      mobileNav: { order: ['shopping', 'today', 'calendar', 'deadlines', 'plants', 'recipes', 'domotica'] },
+      mobileNav: { order: ['shopping', 'today', 'calendar', 'deadlines', 'plants', 'recipes', 'domotica', 'vehicles'] },
     };
     const savedMember = await call('/api/dashboard/preferences', { method: 'PUT', body: memberPreferences });
     assert.deepEqual(savedMember.data.preferences, memberPreferences);
@@ -591,6 +725,8 @@ async function main() {
     const json = await call('/api/backup/export/json');
     assert.equal(json.status, 200);
     assert.ok(json.data.tables.users.length >= 2);
+    assert.ok(Array.isArray(json.data.tables.vehicles));
+    assert.ok(Array.isArray(json.data.tables.vehicle_records));
   });
 
   await step('logout', async () => {

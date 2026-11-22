@@ -83,9 +83,10 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 | 🪴 | **Piante** | Schede con foto, attività ricorrenti (acqua, concime, potatura, rinvaso, controllo), diario delle cure. |
 | 🏠 | **Domotica** | Dispositivi Home Assistant divisi per stanza, gruppi espandibili e controlli accendi/spegni; gestione riservata agli amministratori. |
 | 📋 | **Log** | Registro delle attività della casa, visibile solo agli amministratori. |
+| 🚗 | **Veicoli** | Auto e scooter di famiglia, con utilizzatore principale, rifornimenti, chilometraggio, spese e notifiche push per le scadenze. |
 | 📎 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | 👨‍👩‍👧 | **Famiglia** | Profili separati con PIN, ruoli amministratore/famiglia, dati condivisi o privati. |
-| 🔔 | **Promemoria** | Notifiche push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima) e piante (il giorno stesso), con coda persistente. |
+| 🔔 | **Promemoria** | Push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima), piante e veicoli; per i veicoli anche un avviso al raggiungimento dei 500 km dalla manutenzione prevista. |
 | 💾 | **Backup** | Pulsante "Esporta backup": ZIP con database, foto e allegati, dati leggibili e istruzioni di ripristino. |
 
 ---
@@ -227,7 +228,7 @@ docker compose exec ghibiri-home npx web-push generate-vapid-keys
 
 Copia la chiave pubblica e quella privata nel `.env` (`PUSH_VAPID_PUBLIC_KEY` e `PUSH_VAPID_PRIVATE_KEY`) e imposta `PUSH_VAPID_SUBJECT` con un indirizzo `mailto:` o un URL. Non condividere né committare la chiave privata; riavvia poi il container con `docker compose up -d --force-recreate`.
 
-Ogni membro abilita le notifiche dalla sezione **Profilo** sul proprio dispositivo e può usare **Invia una prova**. Dalla stessa sezione può attivare o sospendere tutte le push e scegliere separatamente **eventi**, **scadenze** e **piante**; queste preferenze valgono per il profilo su tutti i suoi dispositivi. Serve HTTPS; su iPhone/iPad (iOS/iPadOS 16.4+) occorre prima aggiungere il sito alla schermata Home e aprirlo da lì. Il tutorial è disponibile nel profilo.
+Ogni membro abilita le notifiche dalla sezione **Profilo** sul proprio dispositivo e può usare **Invia una prova**. Dalla stessa sezione può attivare o sospendere tutte le push e scegliere separatamente **eventi**, **scadenze**, **piante** e **veicoli**; queste preferenze valgono per il profilo su tutti i suoi dispositivi. Serve HTTPS; su iPhone/iPad (iOS/iPadOS 16.4+) occorre prima aggiungere il sito alla schermata Home e aprirlo da lì. Il tutorial è disponibile nel profilo.
 
 L'ora e l'anticipo dei promemoria si configurano in **Impostazioni → Promemoria** (fuso orario `Europe/Rome`, ora predefinita `09:00`).
 
@@ -241,6 +242,10 @@ HOME_ASSISTANT_TOKEN=il_tuo_token
 ```
 
 Riavvia Ghibiri Home dopo aver salvato le variabili. Tutti i membri possono aprire **Domotica** e usare i dispositivi aggiunti dagli amministratori. L’amministratore può aggiungere luci, prese, ventilatori, `input_boolean` e lettori supportati usando l’entity ID oppure selezionandoli dagli stati disponibili in Home Assistant. Assegna stanza e, se vuoi comandare più entità insieme, lo stesso nome di gruppo (ad esempio **Tavolo**): il gruppo avrà un comando unico e potrà essere espanso per agire sui singoli dispositivi.
+
+### 🚗 Veicoli
+
+In **Veicoli** la famiglia può registrare auto e scooter, assegnare a ciascuno l’utente che lo utilizza principalmente e tenere uno storico condiviso di rifornimenti, tagliandi, revisioni, assicurazioni, bollo, pneumatici e altre attività. Ogni registrazione può includere chilometraggio, litri, costo e prossima scadenza per data o chilometri. Le scadenze per data generano push con gli stessi anticipi configurati in **Impostazioni → Promemoria** (7 e 1 giorno prima in modo predefinito). Per quelle a chilometraggio, la push parte quando l’ultimo chilometraggio registrato arriva a 500 km dalla soglia o la supera; perciò aggiorna i km quando registri un rifornimento o un intervento.
 
 ### 🤖 Ricette con l'AI
 

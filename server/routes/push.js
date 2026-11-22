@@ -23,13 +23,14 @@ const subscriptionSchema = z.object({
   }),
 });
 
-const defaultPreferences = { enabled: true, events: true, deadlines: true, plants: true };
+const defaultPreferences = { enabled: true, events: true, deadlines: true, plants: true, vehicles: true };
 const preferencesSchema = z
   .object({
     enabled: z.boolean(),
     events: z.boolean(),
     deadlines: z.boolean(),
     plants: z.boolean(),
+    vehicles: z.boolean().default(true),
   })
   .strict();
 
@@ -40,6 +41,7 @@ function serializePreferences(row) {
     events: row.events_enabled === 1,
     deadlines: row.deadlines_enabled === 1,
     plants: row.plants_enabled === 1,
+    vehicles: row.vehicles_enabled === 1,
   };
 }
 
@@ -64,13 +66,14 @@ pushRouter.get('/preferences', (req, res) => {
 pushRouter.put('/preferences', (req, res) => {
   const preferences = validate(preferencesSchema, req.body);
   db.prepare(
-    `INSERT INTO push_preferences (user_id, enabled, events_enabled, deadlines_enabled, plants_enabled, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO push_preferences (user_id, enabled, events_enabled, deadlines_enabled, plants_enabled, vehicles_enabled, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET
        enabled = excluded.enabled,
        events_enabled = excluded.events_enabled,
        deadlines_enabled = excluded.deadlines_enabled,
        plants_enabled = excluded.plants_enabled,
+       vehicles_enabled = excluded.vehicles_enabled,
        updated_at = excluded.updated_at`,
   ).run(
     req.user.id,
@@ -78,6 +81,7 @@ pushRouter.put('/preferences', (req, res) => {
     Number(preferences.events),
     Number(preferences.deadlines),
     Number(preferences.plants),
+    Number(preferences.vehicles),
     nowIso(),
   );
   audit(req.user.id, 'update_push_preferences');

@@ -135,6 +135,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     ['/piante', 'Le piante'],
     ['/domotica', 'Domotica'],
     ['/log', 'Log'],
+    ['/veicoli', 'Veicoli'],
     ['/impostazioni', 'Impostazioni'],
     ['/profilo', 'Profilo'],
   ];
@@ -207,6 +208,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.body.textContent).toContain('Eventi');
     expect(document.body.textContent).toContain('Scadenze');
     expect(document.body.textContent).toContain('Piante');
+    expect(document.querySelector('[aria-label="Notifiche per i veicoli"]')?.getAttribute('role')).toBe('switch');
   });
 
   it('mostra l’anteprima di un evento e apre la modifica solo su richiesta', async () => {
@@ -269,7 +271,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.body.textContent).toContain('Ordine dei collegamenti');
     expect(document.body.textContent).toContain('I primi 4 sono nella barra in basso');
     expect(document.body.textContent).toContain('Impostazioni, Profilo ed Esci restano fissi in fondo al menu Altro.');
-    expect(document.querySelectorAll('.sort-handle')).toHaveLength(16);
+    expect(document.querySelectorAll('.sort-handle')).toHaveLength(17);
     expect(document.querySelector('[aria-label="Sposta Spesa in alto"]')).toBeNull();
 
     const { useAuthStore } = await import('./stores/auth.js');
@@ -312,6 +314,20 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     await settle(200);
     expect(document.body.textContent).toContain('Gruppo (facoltativo)');
     expect(document.body.textContent).toContain('I dispositivi con lo stesso gruppo e stanza si comandano insieme.');
+    const cancel = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla');
+    cancel?.click();
+  });
+
+  it('permette di scegliere auto o scooter e l’utente principale', async () => {
+    await router.push('/veicoli');
+    await settle(400);
+    const add = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Aggiungi il primo veicolo'));
+    expect(add).toBeTruthy();
+    add.click();
+    await settle(200);
+    expect(document.body.textContent).toContain('Scooter');
+    expect(document.body.textContent).toContain('Utilizzato principalmente da');
+    expect(document.querySelector('#vehicle-user')).toBeTruthy();
     const cancel = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla');
     cancel?.click();
   });

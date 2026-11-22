@@ -173,7 +173,7 @@ CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, en
 
 CREATE TABLE IF NOT EXISTS reminders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  entity_type TEXT NOT NULL CHECK (entity_type IN ('event','deadline','plant_task')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('event','deadline','plant_task','vehicle_record')),
   entity_id INTEGER NOT NULL,
   send_at TEXT NOT NULL,
   occurrence_at TEXT,
@@ -217,6 +217,7 @@ CREATE TABLE IF NOT EXISTS push_preferences (
   events_enabled INTEGER NOT NULL DEFAULT 1,
   deadlines_enabled INTEGER NOT NULL DEFAULT 1,
   plants_enabled INTEGER NOT NULL DEFAULT 1,
+  vehicles_enabled INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL
 );
 
@@ -257,6 +258,37 @@ CREATE TABLE IF NOT EXISTS domotica_devices (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_domotica_devices_sort ON domotica_devices(sort_order, name);
+
+CREATE TABLE IF NOT EXISTS vehicles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('car','scooter')),
+  plate TEXT,
+  main_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  notes TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vehicles_name ON vehicles(name COLLATE NOCASE);
+
+CREATE TABLE IF NOT EXISTS vehicle_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('fuel','service','inspection','insurance','tax','tires','other')),
+  occurred_on TEXT NOT NULL,
+  odometer INTEGER,
+  amount REAL,
+  liters REAL,
+  description TEXT,
+  next_due_date TEXT,
+  next_due_odometer INTEGER,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vehicle_records_history ON vehicle_records(vehicle_id, occurred_on DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_vehicle_records_due ON vehicle_records(next_due_date);
 `;
 
 db.exec(SCHEMA);
@@ -265,6 +297,40 @@ db.prepare("UPDATE reminders SET channel = 'push' WHERE channel = 'email'").run(
 db.prepare("DELETE FROM settings WHERE key = 'reminder_email_enabled'").run();
 
 // Migrazioni idempotenti per database creati con versioni precedenti.
+const remindersDefinition = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'reminders'").get();
+if (remindersDefinition && !remindersDefinition.sql.includes("'vehicle_record'")) {
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE reminders_v10 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('event','deadline','plant_task','vehicle_record')),
+          entity_id INTEGER NOT NULL,
+          send_at TEXT NOT NULL,
+          occurrence_at TEXT,
+          channel TEXT NOT NULL DEFAULT 'push',
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sent','failed','cancelled')),
+          attempts INTEGER NOT NULL DEFAULT 0,
+          sent_at TEXT,
+          last_error TEXT,
+          source TEXT NOT NULL DEFAULT 'auto',
+          created_at TEXT NOT NULL
+        );
+        INSERT INTO reminders_v10
+          (id, entity_type, entity_id, send_at, occurrence_at, channel, status, attempts, sent_at, last_error, source, created_at)
+        SELECT id, entity_type, entity_id, send_at, occurrence_at, channel, status, attempts, sent_at, last_error, source, created_at
+        FROM reminders;
+        DROP TABLE reminders;
+        ALTER TABLE reminders_v10 RENAME TO reminders;
+        CREATE INDEX idx_reminders_due ON reminders(status, send_at);
+        CREATE INDEX idx_reminders_entity ON reminders(entity_type, entity_id);
+      `);
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
 db.prepare(
   `UPDATE plants
    SET location = CASE
@@ -285,7 +351,11 @@ const domoticaColumns = new Set(db.pragma('table_info(domotica_devices)').map((c
 if (!domoticaColumns.has('group_name')) {
   db.exec('ALTER TABLE domotica_devices ADD COLUMN group_name TEXT');
 }
-db.pragma('user_version = 8');
+const pushPreferenceColumns = new Set(db.pragma('table_info(push_preferences)').map((column) => column.name));
+if (!pushPreferenceColumns.has('vehicles_enabled')) {
+  db.exec('ALTER TABLE push_preferences ADD COLUMN vehicles_enabled INTEGER NOT NULL DEFAULT 1');
+}
+db.pragma('user_version = 10');
 
 export const nowIso = () => new Date().toISOString();
 

@@ -5,6 +5,7 @@ import { addDays, expandRecurrence, isoToLocalDate, localDateTimeToIso, todayLoc
 import { pushConfigured, pushTitle, sendPushNotification } from './push.js';
 
 const MAX_ATTEMPTS = 3;
+const VEHICLE_ODO_WARNING_KM = 500;
 
 function deletePendingAuto(entityType, entityId) {
   db.prepare("DELETE FROM reminders WHERE entity_type = ? AND entity_id = ? AND status = 'pending' AND source = 'auto'").run(
@@ -100,6 +101,70 @@ export function syncPlantTaskReminders(taskId) {
   });
 }
 
+export function syncVehicleReminders(vehicleId) {
+  const rows = db
+    .prepare(
+      `SELECT r.*, v.name AS vehicle_name,
+        (SELECT latest.odometer FROM vehicle_records latest
+         WHERE latest.vehicle_id = v.id AND latest.odometer IS NOT NULL
+         ORDER BY latest.occurred_on DESC, latest.id DESC LIMIT 1) AS current_odometer
+       FROM vehicle_records r JOIN vehicles v ON v.id = r.vehicle_id
+       WHERE v.id = ?`,
+    )
+    .all(vehicleId);
+  const now = Date.now();
+  const hour = reminderHour();
+  const offsets = deadlineOffsets();
+
+  for (const record of rows) {
+    const wanted = new Set();
+    const pending = db
+      .prepare(
+        `SELECT id, occurrence_at FROM reminders
+         WHERE entity_type = 'vehicle_record' AND entity_id = ? AND status = 'pending' AND source = 'auto'`,
+      )
+      .all(record.id);
+    const pendingKeys = new Set(pending.map((reminder) => reminder.occurrence_at));
+    const queueReminder = (occurrenceAt, sendAt) => {
+      if (new Date(sendAt).getTime() < now + 60_000) return;
+      wanted.add(occurrenceAt);
+      if (!pendingKeys.has(occurrenceAt)) {
+        insertReminder({ entityType: 'vehicle_record', entityId: record.id, sendAt, occurrenceAt });
+      }
+    };
+
+    if (record.next_due_date) {
+      for (const offset of offsets) {
+        const sendDate = addDays(record.next_due_date, -offset);
+        queueReminder(
+          `date:${record.id}:${record.next_due_date}:${offset}`,
+          localDateTimeToIso(sendDate, hour),
+        );
+      }
+    }
+
+    if (
+      record.next_due_odometer !== null &&
+      record.current_odometer !== null &&
+      record.current_odometer >= record.next_due_odometer - VEHICLE_ODO_WARNING_KM
+    ) {
+      const occurrenceAt = `km:${record.id}:${record.next_due_odometer}`;
+      wanted.add(occurrenceAt);
+      if (!pendingKeys.has(occurrenceAt)) {
+        const sendAt = new Date(now + 61_000).toISOString();
+        insertReminder({ entityType: 'vehicle_record', entityId: record.id, sendAt, occurrenceAt });
+      }
+    }
+
+    const cancel = db.prepare(
+      "UPDATE reminders SET status = 'cancelled', last_error = 'scadenza veicolo modificata' WHERE id = ?",
+    );
+    for (const reminder of pending) {
+      if (!wanted.has(reminder.occurrence_at)) cancel.run(reminder.id);
+    }
+  }
+}
+
 export function syncEntityReminders(entityType, entityId) {
   if (entityType === 'deadline') {
     const row = db.prepare('SELECT * FROM deadlines WHERE id = ?').get(entityId);
@@ -109,11 +174,22 @@ export function syncEntityReminders(entityType, entityId) {
     if (row) syncEventReminders(row);
   } else if (entityType === 'plant_task') {
     syncPlantTaskReminders(entityId);
+  } else if (entityType === 'vehicle_record') {
+    const row = db.prepare('SELECT vehicle_id FROM vehicle_records WHERE id = ?').get(entityId);
+    if (row) syncVehicleReminders(row.vehicle_id);
   }
 }
 
 export function removeEntityReminders(entityType, entityId) {
   db.prepare('DELETE FROM reminders WHERE entity_type = ? AND entity_id = ?').run(entityType, entityId);
+}
+
+export function removeVehicleReminders(vehicleId) {
+  db.prepare(
+    `DELETE FROM reminders
+     WHERE entity_type = 'vehicle_record'
+       AND entity_id IN (SELECT id FROM vehicle_records WHERE vehicle_id = ?)`,
+  ).run(vehicleId);
 }
 
 export function refreshRecurringEvents() {
@@ -127,6 +203,7 @@ export function syncAllReminders() {
   for (const row of db.prepare("SELECT * FROM deadlines WHERE status = 'open'").all()) syncDeadlineReminders(row);
   for (const row of db.prepare('SELECT * FROM events').all()) syncEventReminders(row);
   for (const task of db.prepare('SELECT id FROM plant_tasks').all()) syncPlantTaskReminders(task.id);
+  for (const vehicle of db.prepare('SELECT id FROM vehicles').all()) syncVehicleReminders(vehicle.id);
 }
 
 function loadReminderEntity(type, id) {
@@ -140,12 +217,24 @@ function loadReminderEntity(type, id) {
   }
   if (type === 'event') return db.prepare('SELECT * FROM events WHERE id = ?').get(id);
   if (type === 'deadline') return db.prepare('SELECT * FROM deadlines WHERE id = ?').get(id);
+  if (type === 'vehicle_record') {
+    return db
+      .prepare(
+        `SELECT r.*, v.name AS vehicle_name, v.plate AS vehicle_plate,
+          (SELECT latest.odometer FROM vehicle_records latest
+           WHERE latest.vehicle_id = v.id AND latest.odometer IS NOT NULL
+           ORDER BY latest.occurred_on DESC, latest.id DESC LIMIT 1) AS current_odometer
+         FROM vehicle_records r JOIN vehicles v ON v.id = r.vehicle_id WHERE r.id = ?`,
+      )
+      .get(id);
+  }
   return null;
 }
 
 function pushPath(entityType) {
   if (entityType === 'event') return '/calendario';
   if (entityType === 'deadline') return '/scadenze';
+  if (entityType === 'vehicle_record') return '/veicoli';
   return '/piante';
 }
 
@@ -178,6 +267,7 @@ async function processDuePushReminders(now) {
     event: subscriptionsForCategory('events_enabled'),
     deadline: subscriptionsForCategory('deadlines_enabled'),
     plant_task: subscriptionsForCategory('plants_enabled'),
+    vehicle_record: subscriptionsForCategory('vehicles_enabled'),
   };
   const pendingDeliveries = db.prepare(
     `SELECT d.reminder_id, d.subscription_id, d.attempts, s.user_id, s.endpoint, s.p256dh, s.auth

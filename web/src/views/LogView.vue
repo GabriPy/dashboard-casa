@@ -66,6 +66,12 @@ const actionDescriptions = {
   control_domotica_group: 'ha controllato un gruppo domotico',
   test_ai: 'ha provato la connessione AI',
   resync_reminders: 'ha sincronizzato i promemoria',
+  create_vehicle: 'ha aggiunto un veicolo',
+  update_vehicle: 'ha modificato un veicolo',
+  delete_vehicle: 'ha rimosso un veicolo',
+  create_vehicle_record: 'ha registrato un’attività per un veicolo',
+  update_vehicle_record: 'ha modificato un’attività di un veicolo',
+  delete_vehicle_record: 'ha eliminato un’attività di un veicolo',
 };
 
 const detailLabels = {
@@ -97,6 +103,7 @@ const entityLabels = {
   shopping_item: 'Prodotto della spesa',
   domotica_device: 'Dispositivo domotico',
   user: 'Profilo',
+  vehicle: 'Veicolo',
 };
 
 function actionDescription(entry) {

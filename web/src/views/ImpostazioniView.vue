@@ -76,6 +76,12 @@ const offsets = computed(() =>
 );
 
 const pendingReminders = computed(() => data.value?.reminders || []);
+const reminderTypeLabels = {
+  plant_task: 'pianta',
+  event: 'evento',
+  deadline: 'scadenza',
+  vehicle_record: 'veicolo',
+};
 
 const adminTabs = [
   { id: 'casa', label: 'Casa', icon: 'home' },
@@ -657,7 +663,7 @@ onBeforeUnmount(() => {
             <div>
               <p class="eyebrow">In coda</p>
               <h2>Prossime notifiche push</h2>
-              <p class="card-note">Generati automaticamente quando crei scadenze, eventi e attività delle piante.</p>
+              <p class="card-note">Generati per scadenze, eventi, cure delle piante e manutenzioni dei veicoli.</p>
             </div>
             <button type="button" class="btn btn-ghost btn-sm" :disabled="resyncing" @click="resyncReminders">
               <Icon name="refresh" :size="14" /> Rigenera
@@ -668,7 +674,7 @@ onBeforeUnmount(() => {
             <div v-for="reminder in pendingReminders" :key="reminder.id" class="reminder-row">
               <span class="reminder-when">{{ formatInstant(reminder.send_at) }}</span>
               <span class="reminder-label">{{ reminder.label || 'Elemento eliminato' }}</span>
-              <span class="badge badge-blue">{{ reminder.entity_type === 'plant_task' ? 'pianta' : reminder.entity_type === 'event' ? 'evento' : 'scadenza' }}</span>
+              <span class="badge badge-blue">{{ reminderTypeLabels[reminder.entity_type] || 'scadenza' }}</span>
             </div>
           </div>
           <p v-else class="muted small">Nessun promemoria in coda.</p>

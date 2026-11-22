@@ -21,6 +21,7 @@ export const mobileNavOptions = [
   { id: 'domotica', label: 'Domotica', icon: 'home-automation', to: '/domotica', hint: 'Luci e dispositivi', tone: 'gold' },
   { id: 'recipes', label: 'Ricette', icon: 'book', to: '/ricette', hint: 'Il ricettario di casa', tone: 'rose' },
   { id: 'plants', label: 'Piante', icon: 'leaf', to: '/piante', hint: 'Cura e diario verde', tone: 'sage' },
+  { id: 'vehicles', label: 'Veicoli', icon: 'car', to: '/veicoli', hint: 'Auto, scooter e manutenzioni', tone: 'blue' },
 ];
 
 export function defaultDashboardPreferences() {

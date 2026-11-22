@@ -48,6 +48,7 @@ const quickItems = computed(() => [
   ...(auth.isAdmin ? [{ label: 'Domotica', hint: 'Luci e dispositivi', icon: 'home-automation', to: '/domotica', emoji: '🏠' }] : []),
   { label: 'Ricetta', hint: 'Un piatto da ricordare', icon: 'book', to: '/ricette', emoji: '🍝' },
   { label: 'Pianta', hint: 'Una nuova pianta di casa', icon: 'leaf', to: '/piante', emoji: '🪴' },
+  { label: 'Veicolo', hint: 'Auto o scooter di casa', icon: 'car', to: '/veicoli', emoji: '🚗' },
 ]);
 
 const isMoreActive = computed(() =>

@@ -56,6 +56,23 @@ Formato errore:
 | --- | --- | --- |
 | GET | `/api/logs?limit=50&beforeId=123` | Attività ordinate dalla più recente; `limit` massimo 100 e `beforeId` per caricare le pagine precedenti. |
 
+## Veicoli
+
+Gli endpoint richiedono una sessione autenticata; i veicoli e i relativi registri sono condivisi in famiglia.
+
+| Metodo | Percorso | Note |
+| --- | --- | --- |
+| GET | `/api/vehicles` | Elenco dei veicoli e degli utenti attivi selezionabili come utilizzatore principale. |
+| POST | `/api/vehicles` | `{ name, type: "car"\|"scooter", plate?, mainUserId?, notes? }`. |
+| GET | `/api/vehicles/:id` | Dettaglio del veicolo e storico delle attività. |
+| PATCH | `/api/vehicles/:id` | Modifica parziale dei dati del veicolo. |
+| DELETE | `/api/vehicles/:id` | Elimina il veicolo e il relativo storico. |
+| POST | `/api/vehicles/:id/records` | Registra rifornimento, tagliando, revisione, assicurazione, bollo, pneumatici o altro; include data, km, costo e prossima scadenza. Le scadenze generano promemoria push. |
+| PATCH | `/api/vehicles/:id/records/:recordId` | Modifica una voce dello storico e aggiorna i promemoria collegati. |
+| DELETE | `/api/vehicles/:id/records/:recordId` | Elimina una voce dello storico e i relativi promemoria. |
+
+Le scadenze per data seguono gli anticipi e l’orario configurati in **Impostazioni → Promemoria**. Quelle per chilometraggio notificano quando l’ultima lettura registrata raggiunge una distanza di 500 km dalla soglia o la supera.
+
 ## Domotica
 
 Gli endpoint richiedono sessione. Le azioni accedono a Home Assistant solo tramite il backend.
@@ -202,8 +219,8 @@ Tutti gli endpoint richiedono una sessione. Le preferenze si applicano al profil
 | Metodo | Percorso | Note |
 | --- | --- | --- |
 | GET | `/api/push/status` | Stato VAPID e sottoscrizioni del profilo; accetta `?endpoint=` per verificare il dispositivo corrente. |
-| GET | `/api/push/preferences` | Legge toggle generale e preferenze per eventi, scadenze e piante. |
-| PUT | `/api/push/preferences` | Aggiorna tutte le preferenze push. |
+| GET | `/api/push/preferences` | Legge toggle generale e preferenze per eventi, scadenze, piante e veicoli. |
+| PUT | `/api/push/preferences` | Aggiorna tutte le preferenze push; `vehicles` è facoltativo per compatibilità e predefinito a `true`. |
 | POST | `/api/push/subscriptions` | Registra o aggiorna la sottoscrizione push del dispositivo. |
 | DELETE | `/api/push/subscriptions` | Rimuove la sottoscrizione indicata nel body. |
 | POST | `/api/push/test` | Invia una notifica di prova al dispositivo indicato. |

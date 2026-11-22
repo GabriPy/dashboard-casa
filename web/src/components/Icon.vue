@@ -71,6 +71,18 @@ const paths = {
     '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1"/><path d="M12 16v2"/>',
   tv:
     '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 21h8M12 18v3"/>',
+  car:
+    '<path d="m5 11 1.6-4.1A3 3 0 0 1 9.4 5h5.2a3 3 0 0 1 2.8 1.9L19 11"/><path d="M3.5 11h17v7h-17z"/><path d="M5.5 18v2M18.5 18v2M4 14h2M18 14h2"/><circle cx="7" cy="17" r=".7" fill="currentColor"/><circle cx="17" cy="17" r=".7" fill="currentColor"/>',
+  scooter:
+    '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 18h6l3-7h3l2 7M12 18l-2-9h4M13 9h4M8 10H6"/>',
+  fuel:
+    '<path d="M4.5 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h14M7.5 7h5"/><path d="M15.5 8h2l2.2 2.4V17a2 2 0 0 1-4 0v-3"/>',
+  wrench:
+    '<path d="M14.2 6.1a5 5 0 0 0-6.3 6.3L3.8 16.5a2.1 2.1 0 0 0 3 3l4.1-4.1a5 5 0 0 0 6.3-6.3l-3.1 3.1-3.2-3.2 3.3-2.9Z"/>',
+  receipt:
+    '<path d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8v-17Z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  wheel:
+    '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="m5.6 5.6 4.3 4.3m8.5-4.3-4.3 4.3m-8.5 8.5 4.3-4.3m8.5 4.3-4.3-4.3"/>',
   refresh: '<path d="M20.6 12a8.6 8.6 0 1 1-2.6-6.2"/><path d="M20.8 3.4v5.2h-5.2"/>',
   shield: '<path d="M12 3.2 20 6v6.1c0 4.9-3.5 7.9-8 9-4.5-1.1-8-4.1-8-9V6l8-2.8Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
   database: '<ellipse cx="12" cy="6" rx="7.6" ry="3"/><path d="M4.4 6v12c0 1.7 3.4 3 7.6 3s7.6-1.3 7.6-3V6"/><path d="M4.4 12c0 1.7 3.4 3 7.6 3s7.6-1.3 7.6-3"/>',

@@ -6,7 +6,14 @@ import { requireAdmin, requireAuth } from '../auth.js';
 import { config } from '../config.js';
 import { HttpError, validate } from '../lib/http.js';
 import { dirSize } from '../uploads.js';
-import { processDueReminders, refreshRecurringEvents, syncDeadlineReminders, syncEventReminders, syncPlantTaskReminders } from '../reminders.js';
+import {
+  processDueReminders,
+  refreshRecurringEvents,
+  syncDeadlineReminders,
+  syncEventReminders,
+  syncPlantTaskReminders,
+  syncVehicleReminders,
+} from '../reminders.js';
 import { aiStatus, checkProvider } from '../ai.js';
 
 export const settingsRouter = Router();
@@ -66,11 +73,24 @@ settingsRouter.get('/', requireAdmin, (_req, res) => {
   const settings = allSettings();
   const reminderQueue = db
     .prepare(
-      `SELECT r.id, r.entity_type, r.entity_id, r.send_at, r.status, r.attempts, r.last_error,
+      `SELECT r.id, r.entity_type, r.entity_id, r.send_at, r.occurrence_at, r.status, r.attempts, r.last_error,
         CASE r.entity_type
           WHEN 'deadline' THEN (SELECT title FROM deadlines WHERE id = r.entity_id)
           WHEN 'event' THEN (SELECT title FROM events WHERE id = r.entity_id)
           WHEN 'plant_task' THEN (SELECT p.name FROM plant_tasks t JOIN plants p ON p.id = t.plant_id WHERE t.id = r.entity_id)
+          WHEN 'vehicle_record' THEN (
+            SELECT v.name || ' · ' || CASE vr.type
+              WHEN 'inspection' THEN 'Revisione'
+              WHEN 'insurance' THEN 'Assicurazione'
+              WHEN 'tax' THEN 'Bollo'
+              WHEN 'service' THEN 'Manutenzione'
+              WHEN 'tires' THEN 'Pneumatici'
+              WHEN 'fuel' THEN 'Rifornimento'
+              ELSE 'Attività'
+            END
+            FROM vehicle_records vr JOIN vehicles v ON v.id = vr.vehicle_id
+            WHERE vr.id = r.entity_id
+          )
         END AS label
        FROM reminders r WHERE r.status = 'pending' ORDER BY r.send_at ASC LIMIT 25`,
     )
@@ -104,6 +124,7 @@ settingsRouter.patch('/', requireAdmin, (req, res) => {
     for (const row of db.prepare("SELECT * FROM deadlines WHERE status = 'open'").all()) syncDeadlineReminders(row);
     for (const row of db.prepare('SELECT * FROM events').all()) syncEventReminders(row);
     for (const task of db.prepare('SELECT id FROM plant_tasks').all()) syncPlantTaskReminders(task.id);
+    for (const vehicle of db.prepare('SELECT id FROM vehicles').all()) syncVehicleReminders(vehicle.id);
   }
   res.json({ settings: allSettings() });
 });
@@ -123,6 +144,7 @@ settingsRouter.post('/resync-reminders', requireAdmin, (req, res) => {
   const deadlines = db.prepare("SELECT * FROM deadlines WHERE status = 'open'").all();
   for (const row of deadlines) syncDeadlineReminders(row);
   refreshRecurringEvents();
+  for (const vehicle of db.prepare('SELECT id FROM vehicles').all()) syncVehicleReminders(vehicle.id);
   audit(req.user.id, 'resync_reminders');
   res.json({ ok: true, deadlines: deadlines.length });
 });
