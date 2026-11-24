@@ -72,6 +72,12 @@ const actionDescriptions = {
   create_vehicle_record: 'ha registrato un’attività per un veicolo',
   update_vehicle_record: 'ha modificato un’attività di un veicolo',
   delete_vehicle_record: 'ha eliminato un’attività di un veicolo',
+  create_medication: 'ha aggiunto una terapia',
+  update_medication: 'ha modificato una terapia',
+  delete_medication: 'ha eliminato una terapia',
+  record_medication_dose: 'ha registrato un’assunzione',
+  skip_medication_dose: 'ha segnato una dose come saltata',
+  undo_medication_dose: 'ha annullato una registrazione di assunzione',
 };
 
 const detailLabels = {
@@ -104,6 +110,7 @@ const entityLabels = {
   domotica_device: 'Dispositivo domotico',
   user: 'Profilo',
   vehicle: 'Veicolo',
+  medication: 'Farmaco',
 };
 
 function actionDescription(entry) {

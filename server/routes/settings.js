@@ -13,6 +13,7 @@ import {
   syncEventReminders,
   syncPlantTaskReminders,
   syncVehicleReminders,
+  syncMedicationReminders,
 } from '../reminders.js';
 import { aiStatus, checkProvider } from '../ai.js';
 
@@ -91,6 +92,7 @@ settingsRouter.get('/', requireAdmin, (_req, res) => {
             FROM vehicle_records vr JOIN vehicles v ON v.id = vr.vehicle_id
             WHERE vr.id = r.entity_id
           )
+          WHEN 'medication' THEN 'Promemoria farmaco'
         END AS label
        FROM reminders r WHERE r.status = 'pending' ORDER BY r.send_at ASC LIMIT 25`,
     )
@@ -125,6 +127,7 @@ settingsRouter.patch('/', requireAdmin, (req, res) => {
     for (const row of db.prepare('SELECT * FROM events').all()) syncEventReminders(row);
     for (const task of db.prepare('SELECT id FROM plant_tasks').all()) syncPlantTaskReminders(task.id);
     for (const vehicle of db.prepare('SELECT id FROM vehicles').all()) syncVehicleReminders(vehicle.id);
+    for (const medication of db.prepare('SELECT id FROM medications').all()) syncMedicationReminders(medication.id);
   }
   res.json({ settings: allSettings() });
 });
@@ -145,6 +148,7 @@ settingsRouter.post('/resync-reminders', requireAdmin, (req, res) => {
   for (const row of deadlines) syncDeadlineReminders(row);
   refreshRecurringEvents();
   for (const vehicle of db.prepare('SELECT id FROM vehicles').all()) syncVehicleReminders(vehicle.id);
+  for (const medication of db.prepare('SELECT id FROM medications').all()) syncMedicationReminders(medication.id);
   audit(req.user.id, 'resync_reminders');
   res.json({ ok: true, deadlines: deadlines.length });
 });

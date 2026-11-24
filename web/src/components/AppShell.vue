@@ -49,6 +49,7 @@ const quickItems = computed(() => [
   { label: 'Ricetta', hint: 'Un piatto da ricordare', icon: 'book', to: '/ricette', emoji: '🍝' },
   { label: 'Pianta', hint: 'Una nuova pianta di casa', icon: 'leaf', to: '/piante', emoji: '🪴' },
   { label: 'Veicolo', hint: 'Auto o scooter di casa', icon: 'car', to: '/veicoli', emoji: '🚗' },
+  { label: 'Farmaco', hint: 'Terapia e promemoria di assunzione', icon: 'pill', to: '/farmaci', emoji: '💊' },
 ]);
 
 const isMoreActive = computed(() =>

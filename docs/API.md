@@ -73,6 +73,22 @@ Gli endpoint richiedono una sessione autenticata; i veicoli e i relativi registr
 
 Le scadenze per data seguono gli anticipi e l’orario configurati in **Impostazioni → Promemoria**. Quelle per chilometraggio notificano quando l’ultima lettura registrata raggiunge una distanza di 500 km dalla soglia o la supera.
 
+## Farmaci
+
+Gli endpoint richiedono una sessione. Ogni farmaco è privato al profilo assegnato oppure condiviso con la casa; anche per quelli condivisi le push arrivano solo ai dispositivi del profilo assegnato e hanno un testo generico, senza il nome del farmaco.
+
+| Metodo | Percorso | Note |
+| --- | --- | --- |
+| GET | `/api/medications` | Elenco visibile, profili attivi selezionabili e dosi programmate per oggi. |
+| POST | `/api/medications` | Crea una terapia con `{ name, dosage?, instructions?, startDate, endDate?, frequency, intervalDays?, times, visibility?, ownerUserId? }`. |
+| GET | `/api/medications/:id` | Dettaglio e storico delle ultime 60 dosi. |
+| PATCH | `/api/medications/:id` | Aggiorna i dati, la visibilità o lo stato `isActive`; sospendere una terapia cancella i promemoria futuri, ma conserva lo storico. |
+| DELETE | `/api/medications/:id` | Il profilo assegnato elimina la terapia e il relativo storico. |
+| POST | `/api/medications/:id/doses` | `{ scheduledAt, status: "taken"\|"skipped", note? }`; registra una dose prevista oggi o nei 30 giorni precedenti, una sola volta. |
+| DELETE | `/api/medications/:id/doses/:doseId` | Annulla una registrazione errata. |
+
+`frequency` accetta `daily`, `every_two_days`, `weekly`, `monthly` e `custom`; per `custom`, `intervalDays` è compreso fra 1 e 365. `times` contiene da 1 a 8 orari locali `HH:mm`. La schedulazione mensile mantiene il giorno d’inizio (ad esempio, il 31 viene adattato all’ultimo giorno dei mesi più corti).
+
 ## Domotica
 
 Gli endpoint richiedono sessione. Le azioni accedono a Home Assistant solo tramite il backend.
@@ -210,7 +226,7 @@ Tipi ammessi: immagini, PDF, `text/plain`, Word (`.doc`, `.docx`). Limite `MAX_U
 | GET | `/api/settings` | admin | Impostazioni, spazio, coda promemoria, ultimo backup e stato AI. |
 | PATCH | `/api/settings` | admin | `household_name`, `reminder_hour`, `deadline_offsets`, `event_offset_days`, `plant_reminders`. Rigenera la coda quando necessario. |
 | POST | `/api/settings/run-reminders` | admin | Forza il controllo della coda. |
-| POST | `/api/settings/resync-reminders` | admin | Rigenera i promemoria delle scadenze, degli eventi ricorrenti e dei veicoli. |
+| POST | `/api/settings/resync-reminders` | admin | Rigenera i promemoria delle scadenze, degli eventi ricorrenti, dei veicoli e dei farmaci. |
 
 ## Notifiche push
 
@@ -219,8 +235,8 @@ Tutti gli endpoint richiedono una sessione. Le preferenze si applicano al profil
 | Metodo | Percorso | Note |
 | --- | --- | --- |
 | GET | `/api/push/status` | Stato VAPID e sottoscrizioni del profilo; accetta `?endpoint=` per verificare il dispositivo corrente. |
-| GET | `/api/push/preferences` | Legge toggle generale e preferenze per eventi, scadenze, piante e veicoli. |
-| PUT | `/api/push/preferences` | Aggiorna tutte le preferenze push; `vehicles` è facoltativo per compatibilità e predefinito a `true`. |
+| GET | `/api/push/preferences` | Legge toggle generale e preferenze per eventi, scadenze, piante, veicoli e farmaci. |
+| PUT | `/api/push/preferences` | Aggiorna tutte le preferenze push; `vehicles` e `medications` sono facoltativi per compatibilità e predefiniti a `true`. |
 | POST | `/api/push/subscriptions` | Registra o aggiorna la sottoscrizione push del dispositivo. |
 | DELETE | `/api/push/subscriptions` | Rimuove la sottoscrizione indicata nel body. |
 | POST | `/api/push/test` | Invia una notifica di prova al dispositivo indicato. |

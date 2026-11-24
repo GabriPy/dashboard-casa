@@ -81,12 +81,13 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 | 🧾 | **Scadenze** | Bollette, documenti, veicoli, casa. Importo, note, ricorrenza mensile o annuale, "fatto" con avanzamento automatico. |
 | 🍳 | **Ricette** | Ingredienti, porzioni, tempo, procedimento a step, foto, preferiti, **"aggiungi ingredienti alla spesa"** e **generazione con AI**. |
 | 🪴 | **Piante** | Schede con foto, attività ricorrenti (acqua, concime, potatura, rinvaso, controllo), diario delle cure. |
+| 💊 | **Farmaci** | Terapie personali o condivise, frequenze configurabili, registrazione delle assunzioni e promemoria push sul profilo assegnato. |
 | 🏠 | **Domotica** | Dispositivi Home Assistant divisi per stanza, gruppi espandibili e controlli accendi/spegni; gestione riservata agli amministratori. |
 | 📋 | **Log** | Registro delle attività della casa, visibile solo agli amministratori. |
 | 🚗 | **Veicoli** | Auto e scooter di famiglia, con utilizzatore principale, rifornimenti, chilometraggio, spese e notifiche push per le scadenze. |
 | 📎 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | 👨‍👩‍👧 | **Famiglia** | Profili separati con PIN, ruoli amministratore/famiglia, dati condivisi o privati. |
-| 🔔 | **Promemoria** | Push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima), piante e veicoli; per i veicoli anche un avviso a 500 km dalla prossima soglia registrata. |
+| 🔔 | **Promemoria** | Push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima), piante, veicoli e orari di assunzione dei farmaci. |
 | 💾 | **Backup** | Pulsante "Esporta backup": ZIP con database, foto e allegati, dati leggibili e istruzioni di ripristino. |
 
 ---
@@ -156,7 +157,7 @@ Se cambi orari o giorni di preavviso, i promemoria vengono rigenerati automatica
 |---|---|---|
 | Database | **SQLite** (file singolo, WAL) invece di MariaDB | Un solo container, circa 40 MB di RAM, nessun servizio da amministrare su 2 GB. Il backup è uno snapshot atomico. Per una famiglia il limite di un solo scrittore è irrilevante. |
 | Login | PIN di 4 cifre per profilo | Chi usa l'app non deve ricordare username o password. La sicurezza viene da HTTPS, blocco dopo 5 tentativi, sessioni HttpOnly e rate limiting. |
-| Dati condivisi | **Condivisi di default**; solo eventi e scadenze possono essere privati | Veicoli e relativo storico sono condivisi con la famiglia. |
+| Dati condivisi | **Condivisi di default**; eventi e scadenze possono essere privati, come i farmaci | I farmaci possono essere privati o condivisi; i promemoria sono sempre inviati solo al profilo assegnato. |
 | Foto e allegati | Disponibili subito su tutti i moduli | Per un elemento nuovo i file vengono caricati subito dopo il salvataggio. |
 | Backup | **Solo manuale**, con pulsante di esportazione | Niente job automatici. L'archivio contiene tutto e le istruzioni per ripristinare. |
 | Promemoria | Push via VAPID, preferenze per profilo | Ogni membro decide quali categorie ricevere e su quali dispositivi. |
@@ -246,6 +247,10 @@ Riavvia Ghibiri Home dopo aver salvato le variabili. Tutti i membri possono apri
 ### 🚗 Veicoli
 
 In **Veicoli** la famiglia può registrare auto e scooter, assegnare a ciascuno l’utente che lo utilizza principalmente e tenere uno storico condiviso di rifornimenti, tagliandi, revisioni, assicurazioni, bollo, pneumatici e altre attività. Ogni registrazione può includere chilometraggio, litri, costo e prossima scadenza per data o chilometri. Le scadenze per data generano push con gli stessi anticipi configurati in **Impostazioni → Promemoria** (7 e 1 giorno prima in modo predefinito). Per quelle a chilometraggio, la push parte quando l’ultimo chilometraggio registrato arriva a 500 km dalla soglia o la supera; perciò aggiorna i km quando registri un rifornimento o un intervento.
+
+### 💊 Farmaci
+
+In **Farmaci** puoi registrare terapie private oppure condividerle con la famiglia, assegnandole al profilo interessato. Per ogni farmaco scegli dose, note, date di inizio/fine, uno o più orari e una frequenza giornaliera, ogni 2 giorni, settimanale, mensile o personalizzata in giorni. Puoi segnare le dosi come assunte o saltate, consultare lo storico e sospendere i promemoria senza cancellare la terapia. Le notifiche push non mostrano il nome del farmaco e arrivano solo ai dispositivi del profilo assegnato; ogni utente può disattivare questa categoria nel proprio Profilo. Le date/orari sono interpretati nel fuso orario della casa. La funzione è un promemoria organizzativo e non sostituisce le indicazioni del medico o del farmacista.
 
 ### 🤖 Ricette con l'AI
 
@@ -432,17 +437,18 @@ Prima di `rm -rf data`, esporta un backup se i dati potrebbero servire ancora.
 │   ├── auth.js             sessioni, ruoli, lockout
 │   ├── reminders.js        coda promemoria e scheduler
 │   ├── reminder-content.js testo dei promemoria push
+│   ├── medication-schedule.js ricorrenze e orari delle terapie
 │   ├── uploads.js          file, MIME, pulizia
 │   ├── ai.js               provider AI compatibile OpenAI
 │   └── routes/             auth, users, events, deadlines, shopping,
-│                           recipes, plants, vehicles, Home Assistant,
+│                           recipes, plants, vehicles, medications, Home Assistant,
 │                           logs, attachments, dashboard, search, settings,
 │                           push, backup, ai
 ├── web/                    Vue 3 + Vite + Pinia
 │   └── src/
 │       ├── components/     AppShell, modali, uploader, PIN pad, generatore AI…
 │       ├── views/          Oggi, Spesa, Calendario, Scadenze, Ricette,
-│       │                   Piante, Domotica, Veicoli, Log, Impostazioni, Profilo
+│       │                   Piante, Domotica, Veicoli, Farmaci, Log, Impostazioni, Profilo
 │       ├── stores/         auth, impostazioni, UI
 │       └── assets/         design system
 ├── docker/entrypoint.sh    permessi /data e drop a utente node

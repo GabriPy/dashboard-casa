@@ -2,6 +2,7 @@ import { config } from './config.js';
 import { db, getSetting, nowIso } from './db.js';
 import { buildReminderContent } from './reminder-content.js';
 import { addDays, expandRecurrence, isoToLocalDate, localDateTimeToIso, todayLocal } from './lib/time.js';
+import { medicationOccurrences } from './medication-schedule.js';
 import { pushConfigured, pushTitle, sendPushNotification } from './push.js';
 
 const MAX_ATTEMPTS = 3;
@@ -165,6 +166,23 @@ export function syncVehicleReminders(vehicleId) {
   }
 }
 
+export function syncMedicationReminders(medicationId) {
+  const medication = db.prepare('SELECT * FROM medications WHERE id = ?').get(medicationId);
+  if (!medication) return;
+  deletePendingAuto('medication', medication.id);
+  if (!medication.is_active) return;
+  const today = todayLocal();
+  const occurrences = medicationOccurrences(medication, today, addDays(today, 60));
+  for (const occurrence of occurrences) {
+    insertReminder({
+      entityType: 'medication',
+      entityId: medication.id,
+      sendAt: occurrence.scheduledAt,
+      occurrenceAt: occurrence.scheduledAt,
+    });
+  }
+}
+
 export function syncEntityReminders(entityType, entityId) {
   if (entityType === 'deadline') {
     const row = db.prepare('SELECT * FROM deadlines WHERE id = ?').get(entityId);
@@ -177,6 +195,8 @@ export function syncEntityReminders(entityType, entityId) {
   } else if (entityType === 'vehicle_record') {
     const row = db.prepare('SELECT vehicle_id FROM vehicle_records WHERE id = ?').get(entityId);
     if (row) syncVehicleReminders(row.vehicle_id);
+  } else if (entityType === 'medication') {
+    syncMedicationReminders(entityId);
   }
 }
 
@@ -204,6 +224,7 @@ export function syncAllReminders() {
   for (const row of db.prepare('SELECT * FROM events').all()) syncEventReminders(row);
   for (const task of db.prepare('SELECT id FROM plant_tasks').all()) syncPlantTaskReminders(task.id);
   for (const vehicle of db.prepare('SELECT id FROM vehicles').all()) syncVehicleReminders(vehicle.id);
+  for (const medication of db.prepare('SELECT id FROM medications').all()) syncMedicationReminders(medication.id);
 }
 
 function loadReminderEntity(type, id) {
@@ -228,6 +249,9 @@ function loadReminderEntity(type, id) {
       )
       .get(id);
   }
+  if (type === 'medication') {
+    return db.prepare('SELECT * FROM medications WHERE id = ?').get(id);
+  }
   return null;
 }
 
@@ -235,6 +259,7 @@ function pushPath(entityType) {
   if (entityType === 'event') return '/calendario';
   if (entityType === 'deadline') return '/scadenze';
   if (entityType === 'vehicle_record') return '/veicoli';
+  if (entityType === 'medication') return '/farmaci';
   return '/piante';
 }
 
@@ -268,6 +293,7 @@ async function processDuePushReminders(now) {
     deadline: subscriptionsForCategory('deadlines_enabled'),
     plant_task: subscriptionsForCategory('plants_enabled'),
     vehicle_record: subscriptionsForCategory('vehicles_enabled'),
+    medication: subscriptionsForCategory('medications_enabled'),
   };
   const pendingDeliveries = db.prepare(
     `SELECT d.reminder_id, d.subscription_id, d.attempts, s.user_id, s.endpoint, s.p256dh, s.auth
@@ -284,9 +310,10 @@ async function processDuePushReminders(now) {
     const isPrivate = ['event', 'deadline'].includes(reminder.entity_type) && entity.visibility === 'private';
     const subscriptions = subscriptionsByEntity[reminder.entity_type];
     if (!subscriptions) continue;
-    const targets = isPrivate
-      ? entity.created_by
-        ? subscriptions.all(0, entity.created_by)
+    const targetUserId = reminder.entity_type === 'medication' ? entity.owner_user_id : entity.created_by;
+    const targets = reminder.entity_type === 'medication' || isPrivate
+      ? targetUserId
+        ? subscriptions.all(0, targetUserId)
         : []
       : subscriptions.all(1, null);
     const targetIds = new Set(targets.map((subscription) => subscription.id));
@@ -377,6 +404,7 @@ export function startScheduler() {
   const refresh = () => {
     try {
       refreshRecurringEvents();
+      for (const medication of db.prepare('SELECT id FROM medications').all()) syncMedicationReminders(medication.id);
     } catch (err) {
       console.error('[promemoria] refresh ricorrenze:', err.message);
     }

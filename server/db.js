@@ -289,6 +289,38 @@ CREATE TABLE IF NOT EXISTS vehicle_records (
 );
 CREATE INDEX IF NOT EXISTS idx_vehicle_records_history ON vehicle_records(vehicle_id, occurred_on DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_vehicle_records_due ON vehicle_records(next_due_date);
+
+CREATE TABLE IF NOT EXISTS medications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  dosage TEXT NOT NULL DEFAULT '',
+  instructions TEXT,
+  start_date TEXT NOT NULL,
+  end_date TEXT,
+  frequency TEXT NOT NULL CHECK (frequency IN ('daily','every_two_days','weekly','monthly','custom')),
+  interval_days INTEGER NOT NULL DEFAULT 1,
+  times TEXT NOT NULL DEFAULT '["09:00"]',
+  visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','shared')),
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_medications_owner ON medications(owner_user_id, is_active);
+
+CREATE TABLE IF NOT EXISTS medication_doses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+  scheduled_at TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('taken','skipped')),
+  taken_at TEXT NOT NULL,
+  taken_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(medication_id, scheduled_at)
+);
+CREATE INDEX IF NOT EXISTS idx_medication_doses_history ON medication_doses(medication_id, scheduled_at DESC);
 `;
 
 db.exec(SCHEMA);
@@ -298,14 +330,14 @@ db.prepare("DELETE FROM settings WHERE key = 'reminder_email_enabled'").run();
 
 // Migrazioni idempotenti per database creati con versioni precedenti.
 const remindersDefinition = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'reminders'").get();
-if (remindersDefinition && !remindersDefinition.sql.includes("'vehicle_record'")) {
+if (remindersDefinition && !remindersDefinition.sql.includes("'medication'")) {
   db.pragma('foreign_keys = OFF');
   try {
     db.transaction(() => {
       db.exec(`
-        CREATE TABLE reminders_v10 (
+        CREATE TABLE reminders_v11 (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          entity_type TEXT NOT NULL CHECK (entity_type IN ('event','deadline','plant_task','vehicle_record')),
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('event','deadline','plant_task','vehicle_record','medication')),
           entity_id INTEGER NOT NULL,
           send_at TEXT NOT NULL,
           occurrence_at TEXT,
@@ -317,12 +349,12 @@ if (remindersDefinition && !remindersDefinition.sql.includes("'vehicle_record'")
           source TEXT NOT NULL DEFAULT 'auto',
           created_at TEXT NOT NULL
         );
-        INSERT INTO reminders_v10
+        INSERT INTO reminders_v11
           (id, entity_type, entity_id, send_at, occurrence_at, channel, status, attempts, sent_at, last_error, source, created_at)
         SELECT id, entity_type, entity_id, send_at, occurrence_at, channel, status, attempts, sent_at, last_error, source, created_at
         FROM reminders;
         DROP TABLE reminders;
-        ALTER TABLE reminders_v10 RENAME TO reminders;
+        ALTER TABLE reminders_v11 RENAME TO reminders;
         CREATE INDEX idx_reminders_due ON reminders(status, send_at);
         CREATE INDEX idx_reminders_entity ON reminders(entity_type, entity_id);
       `);
@@ -355,7 +387,10 @@ const pushPreferenceColumns = new Set(db.pragma('table_info(push_preferences)').
 if (!pushPreferenceColumns.has('vehicles_enabled')) {
   db.exec('ALTER TABLE push_preferences ADD COLUMN vehicles_enabled INTEGER NOT NULL DEFAULT 1');
 }
-db.pragma('user_version = 10');
+if (!pushPreferenceColumns.has('medications_enabled')) {
+  db.exec('ALTER TABLE push_preferences ADD COLUMN medications_enabled INTEGER NOT NULL DEFAULT 1');
+}
+db.pragma('user_version = 11');
 
 export const nowIso = () => new Date().toISOString();
 

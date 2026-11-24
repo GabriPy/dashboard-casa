@@ -46,7 +46,7 @@ Documento di sintesi sulle scelte tecniche e di prodotto, con le alternative val
 
 ## 3. Dati condivisi e privati
 
-**Scelta.** Tutto è **condiviso con la famiglia per default**. Eventi e scadenze possono essere marcati **“Privato”**: in quel caso sono visibili e modificabili solo da chi li ha creati. L’amministratore non può leggerne il contenuto dall’app.
+**Scelta.** I dati della casa sono condivisi per default. Eventi e scadenze possono essere marcati **“Privato”**: in quel caso sono visibili e modificabili solo da chi li ha creati. I farmaci possono essere privati al profilo assegnato oppure condivisi con la famiglia; anche quando sono condivisi, le push vengono inviate solo ai dispositivi del profilo assegnato. L’amministratore non può leggere i farmaci privati nell’app.
 
 Nota di onestà: chi amministra il server può reimpostare un PIN o esportare un backup completo, quindi può in teoria accedere a tutto. La privacy è verso gli altri membri della famiglia, non verso chi controlla l’hardware.
 
@@ -56,13 +56,14 @@ Spesa, ricette, piante e veicoli con il loro storico sono condivisi: sono dati d
 
 - Il modello mentale più semplice per mamma è “la casa è condivisa”. Un’impostazione di privacy per ogni cosa creerebbe attrito.
 - Le eccezioni che contano davvero sono poche: una visita medica, una pratica personale, un regalo. Per queste c’è il lucchetto.
-- La regola “privato = solo il creatore” è netta e verificabile lato server, senza dipendere da permessi complicati.
+- La regola “privato = solo creatore” per eventi/scadenze e “privato = solo profilo assegnato” per i farmaci è netta e verificabile lato server.
 
 **Come è applicata.**
 
-- Colonna `visibility` su `events` e `deadlines`, controllata in ogni query di lettura, modifica ed eliminazione.
+- Colonna `visibility` su eventi, scadenze e farmaci, controllata lato server in lettura e modifica; un farmaco condiviso resta gestibile dalla famiglia, mentre la sua eliminazione o trasformazione in privato spetta al profilo assegnato.
 - Gli allegati ereditano la visibilità dell’elemento: un file agganciato a una scadenza privata non è scaricabile dagli altri.
 - Le notifiche push per un elemento privato vanno solo al creatore.
+- I promemoria dei farmaci non includono il nome nelle notifiche push e arrivano esclusivamente al profilo assegnato.
 - Il backup completo (amministratore) include tutto, compresi i dati privati: è un’esportazione del server, non una vista dell’app.
 
 ---
@@ -111,6 +112,7 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 - Eventi: 1 giorno prima; per le ricorrenze vengono generate le occorrenze future.
 - Piante: il giorno in cui l’attività è prevista.
 - Veicoli: le scadenze per data seguono gli anticipi generali; quelle per chilometraggio avvisano quando l’ultima lettura registrata arriva a 500 km dalla soglia o la supera.
+- Farmaci: ogni piano genera promemoria agli orari locali previsti, per occorrenze giornaliere, ogni due giorni, settimanali, mensili o a intervallo personalizzato. Il profilo assegnato può disattivare questa categoria; il testo push resta generico per non esporre il nome sulla schermata di blocco.
 - Ogni profilo può disattivare tutte le notifiche o singole categorie; le preferenze valgono su tutti i dispositivi del profilo.
 - Il server usa chiavi VAPID; ogni dispositivo deve autorizzare le notifiche e mantenere una sottoscrizione attiva.
 - Un promemoria più vecchio di 48 ore viene annullato invece di arrivare in ritardo.
@@ -165,7 +167,7 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 
 ## 11. Debito tecnico consapevole
 
-- **Migrazioni senza registro centralizzato**: lo schema usa `PRAGMA user_version` (attualmente versione 10) e migrazioni idempotenti in `server/db.js`; non c’è una tabella `migrations`.
+- **Migrazioni senza registro centralizzato**: lo schema usa `PRAGMA user_version` (attualmente versione 11) e migrazioni idempotenti in `server/db.js`; non c’è una tabella `migrations`.
 - **Nessuna compressione immagini**: da valutare se le foto da telefono riempiono il disco.
 - **Nessun job di pulizia degli allegati orfani**: oggi l’eliminazione avviene insieme all’elemento.
 - **Un solo livello di test UI**, dipendente dai dati demo.

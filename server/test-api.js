@@ -207,6 +207,85 @@ async function main() {
     assert.ok(!queueAfterDelete.data.reminders.some((reminder) => reminder.label === `Scooter casa ${stamp} · Manutenzione`));
   });
 
+  await step('farmaci: frequenze, assunzioni e privacy', async () => {
+    const today = todayLocal();
+    const privateName = `Farmaco privato ${stamp}`;
+    const privateCreated = await call('/api/medications', {
+      method: 'POST',
+      body: {
+        name: privateName,
+        dosage: '1 compressa',
+        startDate: addDays(today, -3),
+        frequency: 'custom',
+        intervalDays: 3,
+        times: ['00:00'],
+        visibility: 'private',
+      },
+    });
+    assert.equal(privateCreated.status, 201, JSON.stringify(privateCreated.data));
+    const privateMedication = privateCreated.data.medication;
+    assert.equal(privateMedication.frequency, 'custom');
+    assert.equal(privateMedication.todayDoses.length, 1, 'l’intervallo personalizzato di 3 giorni deve ricorrere oggi');
+
+    const taken = await call(`/api/medications/${privateMedication.id}/doses`, {
+      method: 'POST',
+      body: { scheduledAt: privateMedication.todayDoses[0].scheduledAt, status: 'taken' },
+    });
+    assert.equal(taken.status, 201);
+    assert.equal(taken.data.dose.status, 'taken');
+    const duplicate = await call(`/api/medications/${privateMedication.id}/doses`, {
+      method: 'POST',
+      body: { scheduledAt: privateMedication.todayDoses[0].scheduledAt, status: 'taken' },
+    });
+    assert.equal(duplicate.status, 409);
+
+    const sharedCreated = await call('/api/medications', {
+      method: 'POST',
+      body: {
+        name: `Farmaco condiviso ${stamp}`,
+        startDate: addDays(today, -1),
+        frequency: 'daily',
+        times: ['00:00', '23:59'],
+        visibility: 'shared',
+        ownerUserId: 2,
+      },
+    });
+    assert.equal(sharedCreated.status, 201, JSON.stringify(sharedCreated.data));
+    const sharedMedication = sharedCreated.data.medication;
+    const queue = await call('/api/settings');
+    const medicationReminders = queue.data.reminders.filter((reminder) => reminder.entity_type === 'medication');
+    assert.ok(medicationReminders.some((reminder) => reminder.entity_id === sharedMedication.id));
+    assert.ok(medicationReminders.every((reminder) => reminder.label === 'Promemoria farmaco'));
+
+    await login(2, MAMMA_PIN);
+    const memberList = await call('/api/medications');
+    assert.ok(memberList.data.medications.some((item) => item.id === sharedMedication.id));
+    assert.ok(!memberList.data.medications.some((item) => item.id === privateMedication.id));
+    assert.equal((await call(`/api/medications/${privateMedication.id}`)).status, 404);
+    const sharedDoses = memberList.data.medications.find((item) => item.id === sharedMedication.id).todayDoses;
+    const sharedDose = sharedDoses.find((dose) => dose.status === 'due');
+    const upcomingDose = sharedDoses.find((dose) => dose.status === 'upcoming');
+    if (upcomingDose) {
+      const tooEarly = await call(`/api/medications/${sharedMedication.id}/doses`, {
+        method: 'POST',
+        body: { scheduledAt: upcomingDose.scheduledAt, status: 'taken' },
+      });
+      assert.equal(tooEarly.status, 400);
+    }
+    const skipped = await call(`/api/medications/${sharedMedication.id}/doses`, {
+      method: 'POST',
+      body: { scheduledAt: sharedDose.scheduledAt, status: 'skipped' },
+    });
+    assert.equal(skipped.status, 201);
+    assert.equal(skipped.data.dose.takenBy.id, 2);
+
+    const sharedDelete = await call(`/api/medications/${sharedMedication.id}`, { method: 'DELETE' });
+    assert.equal(sharedDelete.status, 200);
+    await login(1, ADMIN_PIN);
+    await call(`/api/medications/${privateMedication.id}`, { method: 'DELETE' });
+    assert.equal((await call(`/api/medications/${sharedMedication.id}`)).status, 404);
+  });
+
   await step('stato notifiche push autenticato', async () => {
     const status = await call('/api/push/status');
     assert.equal(status.status, 200);
@@ -220,11 +299,11 @@ async function main() {
   });
 
   await step('preferenze push per profilo e categoria', async () => {
-    const defaults = { enabled: true, events: true, deadlines: true, plants: true, vehicles: true };
+    const defaults = { enabled: true, events: true, deadlines: true, plants: true, vehicles: true, medications: true };
     const legacy = { enabled: true, events: true, deadlines: true, plants: true };
     const legacySave = await call('/api/push/preferences', { method: 'PUT', body: legacy });
     assert.deepEqual(legacySave.data.preferences, defaults);
-    const adminPreferences = { ...defaults, events: false, plants: false, vehicles: false };
+    const adminPreferences = { ...defaults, events: false, plants: false, vehicles: false, medications: false };
     const savedAdmin = await call('/api/push/preferences', { method: 'PUT', body: adminPreferences });
     assert.deepEqual(savedAdmin.data.preferences, adminPreferences);
     assert.deepEqual((await call('/api/push/preferences')).data.preferences, adminPreferences);
@@ -324,7 +403,7 @@ async function main() {
         order: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
         visible: ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'],
       },
-      mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants', 'vehicles'] },
+      mobileNav: { order: ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants', 'vehicles', 'medications'] },
     };
     const initial = await call('/api/dashboard/preferences');
     assert.deepEqual(initial.data.preferences, defaults);
@@ -332,7 +411,7 @@ async function main() {
     const adminPreferences = {
       cards: { order: ['recipes', 'plants', 'deadlines', 'shopping'], visible: ['recipes', 'plants'] },
       sections: { order: ['recipe', 'plants', 'shopping', 'deadlines', 'agenda'], visible: ['recipe', 'plants', 'agenda'] },
-      mobileNav: { order: ['recipes', 'plants', 'deadlines', 'shopping', 'calendar', 'today', 'domotica', 'vehicles'] },
+      mobileNav: { order: ['recipes', 'plants', 'deadlines', 'shopping', 'calendar', 'today', 'domotica', 'vehicles', 'medications'] },
     };
     const savedAdmin = await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
     assert.equal(savedAdmin.status, 200);
@@ -368,6 +447,7 @@ async function main() {
       'today',
       'domotica',
       'vehicles',
+      'medications',
     ]);
     const sevenLinkOrder = await call('/api/dashboard/preferences', {
       method: 'PUT',
@@ -385,6 +465,7 @@ async function main() {
       'recipes',
       'plants',
       'vehicles',
+      'medications',
     ]);
     await call('/api/dashboard/preferences', { method: 'PUT', body: adminPreferences });
 
@@ -394,7 +475,7 @@ async function main() {
     const memberPreferences = {
       cards: { order: ['deadlines', 'shopping', 'plants', 'recipes'], visible: ['deadlines', 'shopping', 'plants', 'recipes'] },
       sections: defaults.sections,
-      mobileNav: { order: ['shopping', 'today', 'calendar', 'deadlines', 'plants', 'recipes', 'domotica', 'vehicles'] },
+      mobileNav: { order: ['shopping', 'today', 'calendar', 'deadlines', 'plants', 'recipes', 'domotica', 'vehicles', 'medications'] },
     };
     const savedMember = await call('/api/dashboard/preferences', { method: 'PUT', body: memberPreferences });
     assert.deepEqual(savedMember.data.preferences, memberPreferences);
@@ -727,6 +808,8 @@ async function main() {
     assert.ok(json.data.tables.users.length >= 2);
     assert.ok(Array.isArray(json.data.tables.vehicles));
     assert.ok(Array.isArray(json.data.tables.vehicle_records));
+    assert.ok(Array.isArray(json.data.tables.medications));
+    assert.ok(Array.isArray(json.data.tables.medication_doses));
   });
 
   await step('logout', async () => {

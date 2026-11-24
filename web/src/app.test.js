@@ -136,6 +136,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     ['/domotica', 'Domotica'],
     ['/log', 'Log'],
     ['/veicoli', 'Veicoli'],
+    ['/farmaci', 'Farmaci'],
     ['/impostazioni', 'Impostazioni'],
     ['/profilo', 'Profilo'],
   ];
@@ -154,6 +155,23 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
       expect(fatal, `errori console su ${path}: ${fatal.join(' | ')}`).toEqual([]);
     }, 20000);
   }
+
+  it('apre rapidamente il form per aggiungere un farmaco', async () => {
+    await router.push('/farmaci');
+    await settle(250);
+    document.querySelector('.quick-add').click();
+    await settle(150);
+    const medicationQuickAdd = [...document.querySelectorAll('.quick-card')].find((button) =>
+      button.textContent.includes('Farmaco'),
+    );
+    expect(medicationQuickAdd).toBeTruthy();
+    medicationQuickAdd.click();
+    await settle(250);
+    expect(router.currentRoute.value.path).toBe('/farmaci');
+    expect(document.querySelector('#med-name')).toBeTruthy();
+    [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla')?.click();
+    await settle(150);
+  });
 
   it('riserva la pagina Log agli amministratori', async () => {
     const { useAuthStore } = await import('./stores/auth.js');
@@ -209,6 +227,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.body.textContent).toContain('Scadenze');
     expect(document.body.textContent).toContain('Piante');
     expect(document.querySelector('[aria-label="Notifiche per i veicoli"]')?.getAttribute('role')).toBe('switch');
+    expect(document.querySelector('[aria-label="Notifiche per i farmaci"]')?.getAttribute('role')).toBe('switch');
   });
 
   it('mostra l’anteprima di un evento e apre la modifica solo su richiesta', async () => {
@@ -271,7 +290,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.body.textContent).toContain('Ordine dei collegamenti');
     expect(document.body.textContent).toContain('I primi 4 sono nella barra in basso');
     expect(document.body.textContent).toContain('Impostazioni, Profilo ed Esci restano fissi in fondo al menu Altro.');
-    expect(document.querySelectorAll('.sort-handle')).toHaveLength(17);
+    expect(document.querySelectorAll('.sort-handle')).toHaveLength(18);
     expect(document.querySelector('[aria-label="Sposta Spesa in alto"]')).toBeNull();
 
     const { useAuthStore } = await import('./stores/auth.js');

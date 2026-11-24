@@ -36,6 +36,7 @@ const router = createRouter({
         { path: 'piante', name: 'plants', component: () => import('@/views/PianteView.vue'), meta: { title: 'Piante' } },
         { path: 'domotica', name: 'home-automation', component: () => import('@/views/DomoticaView.vue'), meta: { title: 'Domotica' } },
         { path: 'veicoli', name: 'vehicles', component: () => import('@/views/VeicoliView.vue'), meta: { title: 'Veicoli' } },
+        { path: 'farmaci', name: 'medications', component: () => import('@/views/FarmaciView.vue'), meta: { title: 'Farmaci' } },
         { path: 'log', name: 'logs', component: () => import('@/views/LogView.vue'), meta: { title: 'Log', admin: true } },
         {
           path: 'piante/:id',

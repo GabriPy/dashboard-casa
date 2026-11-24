@@ -25,6 +25,8 @@ function dumpData() {
     'plant_logs',
     'vehicles',
     'vehicle_records',
+    'medications',
+    'medication_doses',
     'attachments',
     'settings',
   ];
@@ -45,7 +47,7 @@ function dumpData() {
 
 function manifest() {
   const counts = {};
-  for (const table of ['users', 'events', 'deadlines', 'shopping_items', 'recipes', 'plants', 'vehicles', 'vehicle_records', 'attachments']) {
+  for (const table of ['users', 'events', 'deadlines', 'shopping_items', 'recipes', 'plants', 'vehicles', 'vehicle_records', 'medications', 'medication_doses', 'attachments']) {
     counts[table] = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
   }
   return {

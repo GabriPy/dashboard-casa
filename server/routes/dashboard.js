@@ -12,7 +12,7 @@ dashboardRouter.use(requireAuth);
 
 const CARD_IDS = ['shopping', 'deadlines', 'plants', 'recipes'];
 const SECTION_IDS = ['agenda', 'deadlines', 'shopping', 'plants', 'recipe'];
-const MOBILE_NAV_IDS = ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants', 'vehicles'];
+const MOBILE_NAV_IDS = ['today', 'shopping', 'calendar', 'deadlines', 'domotica', 'recipes', 'plants', 'vehicles', 'medications'];
 const uniqueList = (values) => new Set(values).size === values.length;
 const dashboardPreferencesSchema = z
   .object({
@@ -28,7 +28,7 @@ const dashboardPreferencesSchema = z
       .object({
         order: z
           .array(z.enum(MOBILE_NAV_IDS))
-          .min(MOBILE_NAV_IDS.length - 2)
+          .min(Math.min(6, MOBILE_NAV_IDS.length))
           .max(MOBILE_NAV_IDS.length)
           .refine(uniqueList),
       })

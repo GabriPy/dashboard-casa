@@ -26,7 +26,7 @@ const pushPermission = ref('unsupported');
 const pushEnabledHere = ref(false);
 const pushBusy = ref(false);
 const pushTutorialOpen = ref(false);
-const pushPreferences = ref({ enabled: true, events: true, deadlines: true, plants: true, vehicles: true });
+const pushPreferences = ref({ enabled: true, events: true, deadlines: true, plants: true, vehicles: true, medications: true });
 const pushPreferencesLoading = ref(true);
 const pushPreferencesSaving = ref(false);
 const secureContext = typeof window !== 'undefined' && window.isSecureContext;
@@ -367,6 +367,22 @@ onMounted(async () => {
               :aria-checked="pushPreferences.vehicles"
               :disabled="pushPreferencesLoading || pushPreferencesSaving"
               @click="togglePushPreference('vehicles')"
+            />
+          </div>
+          <div class="switch-row push-preference-row">
+            <div class="push-preference-copy">
+              <strong>Farmaci</strong>
+              <p class="hint">Promemoria personali per le assunzioni programmate.</p>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: pushPreferences.medications }"
+              role="switch"
+              aria-label="Notifiche per i farmaci"
+              :aria-checked="pushPreferences.medications"
+              :disabled="pushPreferencesLoading || pushPreferencesSaving"
+              @click="togglePushPreference('medications')"
             />
           </div>
         </div>

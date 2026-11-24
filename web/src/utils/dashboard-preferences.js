@@ -22,6 +22,7 @@ export const mobileNavOptions = [
   { id: 'recipes', label: 'Ricette', icon: 'book', to: '/ricette', hint: 'Il ricettario di casa', tone: 'rose' },
   { id: 'plants', label: 'Piante', icon: 'leaf', to: '/piante', hint: 'Cura e diario verde', tone: 'sage' },
   { id: 'vehicles', label: 'Veicoli', icon: 'car', to: '/veicoli', hint: 'Auto, scooter e manutenzioni', tone: 'blue' },
+  { id: 'medications', label: 'Farmaci', icon: 'pill', to: '/farmaci', hint: 'Terapie e assunzioni', tone: 'rose' },
 ];
 
 export function defaultDashboardPreferences() {

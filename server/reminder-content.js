@@ -58,6 +58,10 @@ export function buildReminderContent(entityType, entity, reminder) {
       entity.vehicle_plate ? `Targa: ${entity.vehicle_plate}` : '',
       entity.description || '',
     ];
+  } else if (entityType === 'medication') {
+    emoji = '💊';
+    title = 'Promemoria farmaco';
+    subtitle = 'È il momento di un’assunzione programmata.';
   } else {
     emoji = '🌿';
     title = `${TASK_LABELS[entity.task_type] || 'Cura'} · ${entity.plant_name}`;
