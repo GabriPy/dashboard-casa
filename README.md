@@ -7,7 +7,7 @@
 
 ### La casa di famiglia, organizzata.
 
-Calendario, spesa, scadenze, ricette e piante in un posto solo.<br/>
+Calendario, spesa, scadenze, ricette, piante, domotica e veicoli in un posto solo.<br/>
 Privato, self-hosted e pensato per il telefono.
 
 <br/>
@@ -57,7 +57,7 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 <img src="docs/screenshots/recipes.png" width="22%" alt="Ricette" />
 <img src="docs/screenshots/plants.png" width="22%" alt="Piante" />
 <img src="docs/screenshots/settings.png" width="22%" alt="Impostazioni" />
-<img src="docs/screenshots/profile.png" width="22%" alt="Oggi" />
+<img src="docs/screenshots/profile.png" width="22%" alt="Profilo" />
 </div>
 
 <!--
@@ -86,7 +86,7 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 | 🚗 | **Veicoli** | Auto e scooter di famiglia, con utilizzatore principale, rifornimenti, chilometraggio, spese e notifiche push per le scadenze. |
 | 📎 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | 👨‍👩‍👧 | **Famiglia** | Profili separati con PIN, ruoli amministratore/famiglia, dati condivisi o privati. |
-| 🔔 | **Promemoria** | Push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima), piante e veicoli; per i veicoli anche un avviso al raggiungimento dei 500 km dalla manutenzione prevista. |
+| 🔔 | **Promemoria** | Push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima), piante e veicoli; per i veicoli anche un avviso a 500 km dalla prossima soglia registrata. |
 | 💾 | **Backup** | Pulsante "Esporta backup": ZIP con database, foto e allegati, dati leggibili e istruzioni di ripristino. |
 
 ---
@@ -156,7 +156,7 @@ Se cambi orari o giorni di preavviso, i promemoria vengono rigenerati automatica
 |---|---|---|
 | Database | **SQLite** (file singolo, WAL) invece di MariaDB | Un solo container, circa 40 MB di RAM, nessun servizio da amministrare su 2 GB. Il backup è uno snapshot atomico. Per una famiglia il limite di un solo scrittore è irrilevante. |
 | Login | PIN di 4 cifre per profilo | Chi usa l'app non deve ricordare username o password. La sicurezza viene da HTTPS, blocco dopo 5 tentativi, sessioni HttpOnly e rate limiting. |
-| Dati condivisi | **Condivisi di default**, con opzione "Privato" su eventi e scadenze | La casa è di tutti; ciò che è personale resta solo di chi lo crea. |
+| Dati condivisi | **Condivisi di default**; solo eventi e scadenze possono essere privati | Veicoli e relativo storico sono condivisi con la famiglia. |
 | Foto e allegati | Disponibili subito su tutti i moduli | Per un elemento nuovo i file vengono caricati subito dopo il salvataggio. |
 | Backup | **Solo manuale**, con pulsante di esportazione | Niente job automatici. L'archivio contiene tutto e le istruzioni per ripristinare. |
 | Promemoria | Push via VAPID, preferenze per profilo | Ogni membro decide quali categorie ricevere e su quali dispositivi. |
@@ -188,7 +188,7 @@ Dettagli e alternative scartate: [`docs/DECISIONI.md`](docs/DECISIONI.md).
 ```bash
 # 1. Configurazione
 cp .env.example .env
-#    modifica almeno APP_URL, ADMIN_PIN, ADMIN_EMAIL, MAMMA_PIN, MAMMA_EMAIL
+#    imposta APP_URL e i PIN; ADMIN_EMAIL e MAMMA_EMAIL sono facoltativi
 
 # 2. Cartella dati (resta sul disco del server)
 mkdir -p data
@@ -411,7 +411,7 @@ Prima di `rm -rf data`, esporta un backup se i dati potrebbero servire ancora.
 | 🙈 **Privato** | La visibilità è verificata lato server a ogni richiesta: un evento o una scadenza privata non è visibile agli altri profili, nemmeno all'amministratore nell'app. |
 | 📎 **Allegati** | Serviti solo con sessione valida e con controllo sull'elemento a cui appartengono. |
 | 🛡️ **Rete** | helmet, CSP, controllo dell'origine sulle richieste che modificano dati, rate limiting. |
-| 🕵️ **Zero tracker** | Niente analytics, niente font o CDN remoti, nessun dato che esce dal server (tranne le email che configuri). |
+| 🕵️ **Zero tracker** | Niente analytics, tracker, font o CDN remoti. Solo le funzioni configurate contattano servizi esterni: AI, Home Assistant e il servizio push del browser. |
 
 > [!NOTE]
 > La privacy vale verso gli altri membri della famiglia, non verso chi amministra l'hardware: chi ha accesso fisico al server può comunque reimpostare un PIN o leggere un backup.
@@ -435,13 +435,14 @@ Prima di `rm -rf data`, esporta un backup se i dati potrebbero servire ancora.
 │   ├── uploads.js          file, MIME, pulizia
 │   ├── ai.js               provider AI compatibile OpenAI
 │   └── routes/             auth, users, events, deadlines, shopping,
-│                           recipes, plants, attachments, dashboard,
-│                           search, settings, backup, ai
+│                           recipes, plants, vehicles, Home Assistant,
+│                           logs, attachments, dashboard, search, settings,
+│                           push, backup, ai
 ├── web/                    Vue 3 + Vite + Pinia
 │   └── src/
 │       ├── components/     AppShell, modali, uploader, PIN pad, generatore AI…
-│       ├── views/          Oggi, Spesa, Calendario, Scadenze,
-│       │                   Ricette, Piante, Impostazioni, Profilo
+│       ├── views/          Oggi, Spesa, Calendario, Scadenze, Ricette,
+│       │                   Piante, Domotica, Veicoli, Log, Impostazioni, Profilo
 │       ├── stores/         auth, impostazioni, UI
 │       └── assets/         design system
 ├── docker/entrypoint.sh    permessi /data e drop a utente node
@@ -455,7 +456,7 @@ Prima di `rm -rf data`, esporta un backup se i dati potrebbero servire ancora.
 
 ## 🔌 API
 
-Il backend espone una API REST organizzata per entità (`auth`, `users`, `events`, `deadlines`, `shopping`, `recipes`, `plants`, `attachments`, `dashboard`, `search`, `settings`, `backup`, `ai`).
+Il backend espone una API REST organizzata per entità (`auth`, `users`, `events`, `deadlines`, `shopping`, `recipes`, `plants`, `vehicles`, `home-assistant`, `logs`, `attachments`, `dashboard`, `search`, `settings`, `push`, `backup`, `ai`).
 
 📖 Documentazione sintetica degli endpoint: [`docs/API.md`](docs/API.md)
 
@@ -466,9 +467,12 @@ Il backend espone una API REST organizzata per entità (`auth`, `users`, `events
 ```bash
 npm install
 cp .env.example .env      # sviluppo: APP_URL=http://localhost:3000, COOKIE_SECURE=false
+# solo per lo sviluppo locale con Vite: imposta DEV_NO_SECURITY=true
 npm run dev               # API su http://localhost:3000
 npm run dev:web           # Vite su http://localhost:5173 con proxy /api
 ```
+
+`DEV_NO_SECURITY=true` disattiva la protezione CSRF: usalo solo in locale, mai con un server esposto o in produzione. Il valore predefinito dell’esempio è `false`.
 
 Per popolare la casa con dati di esempio imposta `SEED_DEMO=true` nel `.env` al primo avvio (solo su database vuoto).
 

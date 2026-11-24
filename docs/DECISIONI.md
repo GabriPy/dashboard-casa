@@ -50,7 +50,7 @@ Documento di sintesi sulle scelte tecniche e di prodotto, con le alternative val
 
 Nota di onestà: chi amministra il server può reimpostare un PIN o esportare un backup completo, quindi può in teoria accedere a tutto. La privacy è verso gli altri membri della famiglia, non verso chi controlla l’hardware.
 
-Spesa, ricette, piante e relative foto sono sempre condivise: sono beni della casa.
+Spesa, ricette, piante e veicoli con il loro storico sono condivisi: sono dati della casa.
 
 **Perché.**
 
@@ -110,6 +110,7 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 - Scadenze: 7 e 1 giorno prima (configurabile, anche il giorno stesso), all’ora impostata.
 - Eventi: 1 giorno prima; per le ricorrenze vengono generate le occorrenze future.
 - Piante: il giorno in cui l’attività è prevista.
+- Veicoli: le scadenze per data seguono gli anticipi generali; quelle per chilometraggio avvisano quando l’ultima lettura registrata arriva a 500 km dalla soglia o la supera.
 - Ogni profilo può disattivare tutte le notifiche o singole categorie; le preferenze valgono su tutti i dispositivi del profilo.
 - Il server usa chiavi VAPID; ogni dispositivo deve autorizzare le notifiche e mantenere una sottoscrizione attiva.
 - Un promemoria più vecchio di 48 ore viene annullato invece di arrivare in ritardo.
@@ -156,7 +157,7 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 | --- | --- |
 | Sync Google Calendar | Richiede OAuth, gestione token e conflitti; non serve al MVP. |
 | Riconoscimento piante con AI | Costo e dipendenza esterna, contrario alla privacy e al budget zero. |
-| Multi-famiglia commerciale | Il modello dati è già per “household”, ma serve isolamento, inviti e amministrazione. |
+| Multi-famiglia commerciale | Il progetto gestisce una sola casa; servono isolamento dei dati, inviti e amministrazione multi-tenant. |
 | Pagamenti automatici | Rischio e compliance non giustificati. |
 | Archivio documentale completo | Gli allegati coprono il caso d’uso; un DMS è un altro prodotto. |
 
@@ -164,7 +165,7 @@ Per un elemento nuovo, l’interfaccia permette di scegliere subito le foto: ven
 
 ## 11. Debito tecnico consapevole
 
-- **Nessuna migrazione versionata**: lo schema attuale è la versione 1; per evoluzioni future conviene introdurre una tabella `migrations` e script incrementali.
+- **Migrazioni senza registro centralizzato**: lo schema usa `PRAGMA user_version` (attualmente versione 10) e migrazioni idempotenti in `server/db.js`; non c’è una tabella `migrations`.
 - **Nessuna compressione immagini**: da valutare se le foto da telefono riempiono il disco.
 - **Nessun job di pulizia degli allegati orfani**: oggi l’eliminazione avviene insieme all’elemento.
 - **Un solo livello di test UI**, dipendente dai dati demo.

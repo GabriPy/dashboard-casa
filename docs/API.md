@@ -210,7 +210,7 @@ Tipi ammessi: immagini, PDF, `text/plain`, Word (`.doc`, `.docx`). Limite `MAX_U
 | GET | `/api/settings` | admin | Impostazioni, spazio, coda promemoria, ultimo backup e stato AI. |
 | PATCH | `/api/settings` | admin | `household_name`, `reminder_hour`, `deadline_offsets`, `event_offset_days`, `plant_reminders`. Rigenera la coda quando necessario. |
 | POST | `/api/settings/run-reminders` | admin | Forza il controllo della coda. |
-| POST | `/api/settings/resync-reminders` | admin | Rigenera tutti i promemoria. |
+| POST | `/api/settings/resync-reminders` | admin | Rigenera i promemoria delle scadenze, degli eventi ricorrenti e dei veicoli. |
 
 ## Notifiche push
 
@@ -237,4 +237,4 @@ Tutti gli endpoint richiedono una sessione. Le preferenze si applicano al profil
 
 | Metodo | Percorso | Note |
 | --- | --- | --- |
-| GET | `/api/health` | Pubblico. Stato applicazione, database, email, uptime. |
+| GET | `/api/health` | Pubblico. Stato e versione dell’app, data/ora, database e uptime. |
