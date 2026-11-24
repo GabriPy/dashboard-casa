@@ -16,7 +16,7 @@ export function medicationOccurrences(medication, from, to, max = 500) {
   const start = medication.start_date;
   const end = medication.end_date && medication.end_date < to ? medication.end_date : to;
   const times = medicationTimes(medication);
-  if (!times.length || end < start) return [];
+  if (end < start) return [];
 
   const dates = [];
   if (medication.frequency === 'monthly') {
@@ -49,11 +49,18 @@ export function medicationOccurrences(medication, from, to, max = 500) {
   }
 
   return dates
-    .flatMap((date) => times.map((time) => ({
-      date,
-      time,
-      scheduledAt: localDateTimeToIso(date, time),
-    })))
+    .flatMap((date) => times.length
+      ? times.map((time) => ({
+        date,
+        time,
+        scheduledAt: localDateTimeToIso(date, time),
+      }))
+      : [{
+        date,
+        time: null,
+        scheduledAt: localDateTimeToIso(date, '00:00'),
+        untimed: true,
+      }])
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
     .slice(0, max);
 }

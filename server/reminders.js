@@ -174,6 +174,7 @@ export function syncMedicationReminders(medicationId) {
   const today = todayLocal();
   const occurrences = medicationOccurrences(medication, today, addDays(today, 60));
   for (const occurrence of occurrences) {
+    if (occurrence.untimed) continue;
     insertReminder({
       entityType: 'medication',
       entityId: medication.id,

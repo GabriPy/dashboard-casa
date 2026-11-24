@@ -250,7 +250,7 @@ In **Veicoli** la famiglia può registrare auto e scooter, assegnare a ciascuno 
 
 ### 💊 Farmaci
 
-In **Farmaci** puoi registrare terapie private oppure condividerle con la famiglia, assegnandole al profilo interessato. Per ogni farmaco scegli dose, note, date di inizio/fine, uno o più orari e una frequenza giornaliera, ogni 2 giorni, settimanale, mensile o personalizzata in giorni. Puoi segnare le dosi come assunte o saltate, consultare lo storico e sospendere i promemoria senza cancellare la terapia. Le notifiche push non mostrano il nome del farmaco e arrivano solo ai dispositivi del profilo assegnato; ogni utente può disattivare questa categoria nel proprio Profilo. Le date/orari sono interpretati nel fuso orario della casa. La funzione è un promemoria organizzativo e non sostituisce le indicazioni del medico o del farmacista.
+In **Farmaci** puoi registrare terapie private oppure condividerle con la famiglia, assegnandole al profilo interessato. Per ogni farmaco scegli dose, note, date di inizio/fine e una frequenza giornaliera, ogni 2 giorni, settimanale, mensile o personalizzata in giorni. Gli orari sono facoltativi: senza orario puoi comunque segnare la dose durante la giornata, ma non viene inviata una push a un’ora arbitraria. Puoi segnare le dosi come assunte o saltate, consultare lo storico e sospendere i promemoria senza cancellare la terapia. Le notifiche push non mostrano il nome del farmaco e arrivano solo ai dispositivi del profilo assegnato; ogni utente può disattivare questa categoria nel proprio Profilo. Le date/orari sono interpretati nel fuso orario della casa. La funzione è un promemoria organizzativo e non sostituisce le indicazioni del medico o del farmacista.
 
 ### 🤖 Ricette con l'AI
 

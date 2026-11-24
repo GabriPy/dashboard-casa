@@ -23,7 +23,7 @@ const medicationSchema = z.object({
   endDate: dateSchema.nullish(),
   frequency: z.enum(medicationFrequencies),
   intervalDays: z.coerce.number().int().min(1).max(365).default(1),
-  times: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Orario non valido.')).min(1).max(8),
+  times: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Orario non valido.')).max(8).default([]),
   visibility: z.enum(['private', 'shared']).default('private'),
   ownerUserId: z.coerce.number().int().positive().optional(),
   isActive: z.boolean().default(true),
@@ -256,14 +256,11 @@ medicationsRouter.post('/:id/doses', (req, res) => {
   const id = toId(req.params.id);
   const medication = accessibleMedication(id, req.user.id);
   const body = validate(doseSchema, req.body);
-  if (new Date(body.scheduledAt).getTime() > Date.now()) {
-    throw new HttpError(400, 'Non puoi registrare in anticipo un’assunzione programmata.');
-  }
   const today = todayLocal();
   const firstDay = addDays(today, -30);
-  const validDose = medicationOccurrences(medication, firstDay, today)
-    .some((occurrence) => occurrence.scheduledAt === body.scheduledAt);
-  if (!validDose) throw new HttpError(400, 'Questa assunzione non corrisponde a un orario previsto negli ultimi 30 giorni.');
+  const occurrence = medicationOccurrences(medication, firstDay, today)
+    .find((item) => item.scheduledAt === body.scheduledAt);
+  if (!occurrence) throw new HttpError(400, 'Questa assunzione non corrisponde a un orario previsto negli ultimi 30 giorni.');
   if (db.prepare('SELECT 1 FROM medication_doses WHERE medication_id = ? AND scheduled_at = ?').get(id, body.scheduledAt)) {
     throw new HttpError(409, 'Questa dose è già stata registrata.');
   }

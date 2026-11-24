@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { addDays, todayLocal } from './lib/time.js';
+import { addDays, localDateTimeToIso, todayLocal } from './lib/time.js';
 import { buildReminderContent } from './reminder-content.js';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
@@ -209,6 +209,32 @@ async function main() {
 
   await step('farmaci: frequenze, assunzioni e privacy', async () => {
     const today = todayLocal();
+    const untimedCreated = await call('/api/medications', {
+      method: 'POST',
+      body: {
+        name: `Farmaco senza orario ${stamp}`,
+        startDate: today,
+        frequency: 'daily',
+      },
+    });
+    assert.equal(untimedCreated.status, 201, JSON.stringify(untimedCreated.data));
+    const untimedMedication = untimedCreated.data.medication;
+    assert.deepEqual(untimedMedication.times, []);
+    assert.equal(untimedMedication.todayDoses.length, 1);
+    assert.equal(untimedMedication.todayDoses[0].time, null);
+    const queueWithoutTimedDose = await call('/api/settings');
+    assert.ok(
+      !queueWithoutTimedDose.data.reminders.some(
+        (reminder) => reminder.entity_type === 'medication' && reminder.entity_id === untimedMedication.id,
+      ),
+      'una terapia senza orario non deve creare notifiche a orari arbitrari',
+    );
+    const untimedDose = await call(`/api/medications/${untimedMedication.id}/doses`, {
+      method: 'POST',
+      body: { scheduledAt: untimedMedication.todayDoses[0].scheduledAt, status: 'taken' },
+    });
+    assert.equal(untimedDose.status, 201);
+
     const privateName = `Farmaco privato ${stamp}`;
     const privateCreated = await call('/api/medications', {
       method: 'POST',
@@ -266,12 +292,17 @@ async function main() {
     const sharedDose = sharedDoses.find((dose) => dose.status === 'due');
     const upcomingDose = sharedDoses.find((dose) => dose.status === 'upcoming');
     if (upcomingDose) {
-      const tooEarly = await call(`/api/medications/${sharedMedication.id}/doses`, {
+      const earlyDose = await call(`/api/medications/${sharedMedication.id}/doses`, {
         method: 'POST',
         body: { scheduledAt: upcomingDose.scheduledAt, status: 'taken' },
       });
-      assert.equal(tooEarly.status, 400);
+      assert.equal(earlyDose.status, 201, 'una dose odierna deve poter essere registrata prima dell’orario previsto');
     }
+    const tomorrowDose = await call(`/api/medications/${sharedMedication.id}/doses`, {
+      method: 'POST',
+      body: { scheduledAt: localDateTimeToIso(addDays(today, 1), '23:59'), status: 'taken' },
+    });
+    assert.equal(tomorrowDose.status, 400, 'non si devono registrare dosi di giorni futuri');
     const skipped = await call(`/api/medications/${sharedMedication.id}/doses`, {
       method: 'POST',
       body: { scheduledAt: sharedDose.scheduledAt, status: 'skipped' },
@@ -283,6 +314,7 @@ async function main() {
     assert.equal(sharedDelete.status, 200);
     await login(1, ADMIN_PIN);
     await call(`/api/medications/${privateMedication.id}`, { method: 'DELETE' });
+    await call(`/api/medications/${untimedMedication.id}`, { method: 'DELETE' });
     assert.equal((await call(`/api/medications/${sharedMedication.id}`)).status, 404);
   });
 

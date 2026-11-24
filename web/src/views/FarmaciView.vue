@@ -37,7 +37,7 @@ const form = reactive({
   visibility: 'private',
   ownerUserId: '',
 });
-const times = ref(['09:00']);
+const times = ref([]);
 const frequencies = [
   { value: 'daily', label: 'Ogni giorno' },
   { value: 'every_two_days', label: 'Ogni 2 giorni' },
@@ -85,7 +85,7 @@ function resetForm() {
     visibility: 'private',
     ownerUserId: String(auth.user?.id || ''),
   });
-  times.value = ['09:00'];
+  times.value = [];
   error.value = '';
 }
 
@@ -125,8 +125,8 @@ async function save() {
     error.value = 'Inserisci il nome del farmaco.';
     return;
   }
-  if (!form.startDate || !times.value.length || times.value.some((time) => !time)) {
-    error.value = 'Inserisci la data di inizio e almeno un orario valido.';
+  if (!form.startDate || times.value.some((time) => !time)) {
+    error.value = 'Inserisci una data di inizio e completa gli orari impostati.';
     return;
   }
   if (new Set(times.value).size !== times.value.length) {
@@ -279,7 +279,7 @@ watch(() => route.query.nuovo, (value) => {
 
         <div class="medication-meta">
           <span><Icon name="calendar" :size="14" /> {{ frequencyLabel(medication) }}</span>
-          <span><Icon name="clock" :size="14" /> {{ medication.times.join(' · ') }}</span>
+          <span><Icon name="clock" :size="14" /> {{ medication.times.length ? medication.times.join(' · ') : 'Senza orario' }}</span>
           <span v-if="medication.visibility === 'shared'"><Icon name="user" :size="14" /> Per {{ medication.owner.name }}</span>
         </div>
         <p v-if="medication.instructions" class="medication-instructions">{{ medication.instructions }}</p>
@@ -287,7 +287,7 @@ watch(() => route.query.nuovo, (value) => {
         <div v-if="medication.todayDoses.length" class="dose-list">
           <div v-for="dose in medication.todayDoses" :key="dose.scheduledAt" class="dose-row">
             <div class="dose-time">
-              <strong>{{ dose.time }}</strong>
+              <strong>{{ dose.time || 'Durante la giornata' }}</strong>
               <span v-if="dose.status === 'taken'" class="badge badge-sage">Assunta</span>
               <span v-else-if="dose.status === 'skipped'" class="badge badge-gold">Saltata</span>
               <span v-else-if="dose.status === 'upcoming'" class="badge badge-blue">In programma</span>
@@ -296,8 +296,8 @@ watch(() => route.query.nuovo, (value) => {
             <span v-if="dose.dose" class="dose-note">
               {{ dose.status === 'taken' ? `Registrata alle ${dose.dose.takenAtLocal.slice(11, 16)}` : `Segnata da ${dose.dose.takenBy?.name || 'un profilo'}` }}
             </span>
-            <span v-else-if="dose.status === 'upcoming'" class="dose-note">Promemoria alle {{ dose.time }}</span>
-            <div v-else class="dose-actions">
+            <span v-else-if="dose.status === 'upcoming'" class="dose-note">Orario previsto alle {{ dose.time }}</span>
+            <div v-if="!dose.dose" class="dose-actions">
               <button
                 type="button"
                 class="btn btn-soft btn-sm"
@@ -380,11 +380,11 @@ watch(() => route.query.nuovo, (value) => {
           <input id="med-end" v-model="form.endDate" class="input" type="date" />
         </div>
         <div class="field full">
-          <label>Orari di assunzione</label>
+          <label>Orari di assunzione <span class="optional-label">(facoltativi)</span></label>
+          <p v-if="!times.length" class="hint no-times-hint">Puoi lasciare la terapia senza un orario fisso. La dose sarà registrabile durante la giornata, senza notifica push a orario.</p>
           <div v-for="(time, index) in times" :key="index" class="time-input-row">
             <input v-model="times[index]" class="input" type="time" :aria-label="`Orario di assunzione ${index + 1}`" />
             <button
-              v-if="times.length > 1"
               type="button"
               class="btn-icon"
               :aria-label="`Rimuovi orario ${index + 1}`"
@@ -393,7 +393,7 @@ watch(() => route.query.nuovo, (value) => {
               <Icon name="trash" :size="16" />
             </button>
           </div>
-          <button v-if="times.length < 8" type="button" class="btn btn-ghost btn-sm add-time" @click="times.push('12:00')">
+          <button v-if="times.length < 8" type="button" class="btn btn-ghost btn-sm add-time" @click="times.push('09:00')">
             <Icon name="plus" :size="14" /> Aggiungi un orario
           </button>
         </div>
@@ -594,6 +594,14 @@ watch(() => route.query.nuovo, (value) => {
   display: flex;
   gap: 8px;
   margin-top: 7px;
+}
+.optional-label {
+  color: var(--muted);
+  font-weight: 400;
+}
+.no-times-hint {
+  margin: 4px 0 8px;
+  line-height: 1.45;
 }
 .time-input-row .input {
   max-width: 180px;

@@ -169,8 +169,43 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     await settle(250);
     expect(router.currentRoute.value.path).toBe('/farmaci');
     expect(document.querySelector('#med-name')).toBeTruthy();
+    expect(document.body.textContent).toContain('Orari di assunzione');
+    expect(document.body.textContent).toContain('Puoi lasciare la terapia senza un orario fisso.');
+    expect(document.querySelectorAll('input[type="time"]').length).toBe(0);
     [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla')?.click();
     await settle(150);
+  });
+
+  it('consente di registrare una dose prima del suo orario', async () => {
+    const { api } = await import('./api.js');
+    const dashboard = await api('/api/dashboard');
+    const created = await api('/api/medications', {
+      method: 'POST',
+      body: {
+        name: `Dose futura test ${Date.now()}`,
+        startDate: dashboard.today,
+        frequency: 'daily',
+        times: ['23:59'],
+      },
+    });
+    try {
+      await router.push('/');
+      await router.push('/farmaci');
+      await settle(400);
+      const medicationCard = [...document.querySelectorAll('.medication-card')].find((card) =>
+        card.textContent.includes(created.medication.name),
+      );
+      expect(medicationCard).toBeTruthy();
+      expect(medicationCard.querySelector('.dose-actions')).toBeTruthy();
+      expect(medicationCard.querySelector('.dose-actions').textContent).toContain('Assunta');
+      expect(medicationCard.querySelector('.dose-actions').textContent).toContain('Saltata');
+      if (created.medication.todayDoses[0].status === 'upcoming') {
+        expect(medicationCard.textContent).toContain('In programma');
+        expect(medicationCard.textContent).toContain('Orario previsto alle');
+      }
+    } finally {
+      await api(`/api/medications/${created.medication.id}`, { method: 'DELETE' });
+    }
   });
 
   it('riserva la pagina Log agli amministratori', async () => {

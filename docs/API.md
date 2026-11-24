@@ -87,7 +87,7 @@ Gli endpoint richiedono una sessione. Ogni farmaco è privato al profilo assegna
 | POST | `/api/medications/:id/doses` | `{ scheduledAt, status: "taken"\|"skipped", note? }`; registra una dose prevista oggi o nei 30 giorni precedenti, una sola volta. |
 | DELETE | `/api/medications/:id/doses/:doseId` | Annulla una registrazione errata. |
 
-`frequency` accetta `daily`, `every_two_days`, `weekly`, `monthly` e `custom`; per `custom`, `intervalDays` è compreso fra 1 e 365. `times` contiene da 1 a 8 orari locali `HH:mm`. La schedulazione mensile mantiene il giorno d’inizio (ad esempio, il 31 viene adattato all’ultimo giorno dei mesi più corti).
+`frequency` accetta `daily`, `every_two_days`, `weekly`, `monthly` e `custom`; per `custom`, `intervalDays` è compreso fra 1 e 365. `times` è facoltativo e contiene da 0 a 8 orari locali `HH:mm`. Se è vuoto o omesso, la dose resta registrabile nel giorno previsto ma non viene accodata una notifica push. La schedulazione mensile mantiene il giorno d’inizio (ad esempio, il 31 viene adattato all’ultimo giorno dei mesi più corti).
 
 ## Domotica
 
