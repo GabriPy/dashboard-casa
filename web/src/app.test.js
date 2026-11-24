@@ -137,6 +137,7 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     ['/log', 'Log'],
     ['/veicoli', 'Veicoli'],
     ['/farmaci', 'Farmaci'],
+    ['/privacy', 'Privacy e cookie'],
     ['/impostazioni', 'Impostazioni'],
     ['/profilo', 'Profilo'],
   ];
@@ -174,6 +175,22 @@ describe('Ghibiri Home — smoke test dell’interfaccia', () => {
     expect(document.querySelectorAll('input[type="time"]').length).toBe(0);
     [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Annulla')?.click();
     await settle(150);
+  });
+
+  it('rende l’informativa privacy accessibile anche senza login', async () => {
+    const { useAuthStore } = await import('./stores/auth.js');
+    const auth = useAuthStore();
+    const user = auth.user;
+    auth.user = null;
+    try {
+      await router.push('/privacy');
+      await settle(200);
+      expect(router.currentRoute.value.path).toBe('/privacy');
+      expect(document.body.textContent).toContain('Gabriele Pili');
+      expect(document.body.textContent).toContain('ghibiri@gmail.com');
+    } finally {
+      auth.user = user;
+    }
   });
 
   it('consente di registrare una dose prima del suo orario', async () => {

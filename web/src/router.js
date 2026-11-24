@@ -18,6 +18,12 @@ const router = createRouter({
       meta: { public: true, title: 'Accedi' },
     },
     {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('@/views/PrivacyView.vue'),
+      meta: { public: true, title: 'Privacy e cookie' },
+    },
+    {
       path: '/',
       component: AppShell,
       children: [

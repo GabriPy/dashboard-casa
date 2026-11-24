@@ -187,7 +187,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
         </template>
       </div>
 
-      <p class="login-foot">Ghibiri Home · un posto tranquillo per le cose di casa</p>
+      <footer class="login-foot">
+        <span>Ghibiri Home · un posto tranquillo per le cose di casa</span>
+        <RouterLink to="/privacy">Privacy e cookie</RouterLink>
+      </footer>
     </main>
   </div>
 </template>
@@ -512,6 +515,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
   font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  text-align: center;
+}
+.login-foot a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .shake {
   animation: shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);

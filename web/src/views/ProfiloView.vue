@@ -506,6 +506,7 @@ onMounted(async () => {
         <div>
           <p class="eyebrow">Ghibiri Home</p>
           <p class="small muted">La casa di famiglia, organizzata. Dati privati, sul tuo server.</p>
+          <RouterLink to="/privacy" class="privacy-link">Informativa privacy e cookie</RouterLink>
         </div>
         <span class="badge badge-sage"><Icon name="shield" :size="11" /> solo famiglia</span>
       </div>
@@ -516,6 +517,14 @@ onMounted(async () => {
 <style scoped>
 .profile-page {
   max-width: 780px;
+}
+.privacy-link {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .profile-hero {
   display: flex;

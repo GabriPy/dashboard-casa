@@ -88,6 +88,7 @@ E' un progetto Docker che puoi far girare dove vuoi. È pensato per stare su un 
 | 📎 | **Foto e allegati** | Immagini, PDF e documenti Word su eventi, scadenze, ricette e piante, protetti da login. |
 | 👨‍👩‍👧 | **Famiglia** | Profili separati con PIN, ruoli amministratore/famiglia, dati condivisi o privati. |
 | 🔔 | **Promemoria** | Push per scadenze (7 e 1 giorno prima), eventi (1 giorno prima), piante, veicoli e orari di assunzione dei farmaci. |
+| 🔐 | **Privacy e cookie** | Informativa pubblica raggiungibile anche senza login; descrive i dati, il cookie di sessione e lo storage tecnico. Non sono presenti tracker o cookie non essenziali. |
 | 💾 | **Backup** | Pulsante "Esporta backup": ZIP con database, foto e allegati, dati leggibili e istruzioni di ripristino. |
 
 ---
@@ -448,7 +449,7 @@ Prima di `rm -rf data`, esporta un backup se i dati potrebbero servire ancora.
 │   └── src/
 │       ├── components/     AppShell, modali, uploader, PIN pad, generatore AI…
 │       ├── views/          Oggi, Spesa, Calendario, Scadenze, Ricette,
-│       │                   Piante, Domotica, Veicoli, Farmaci, Log, Impostazioni, Profilo
+│       │                   Piante, Domotica, Veicoli, Farmaci, Privacy, Log, Impostazioni, Profilo
 │       ├── stores/         auth, impostazioni, UI
 │       └── assets/         design system
 ├── docker/entrypoint.sh    permessi /data e drop a utente node
